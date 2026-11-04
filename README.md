@@ -59,6 +59,20 @@ and 422 means bad params or a platform mismatch.
 Full detail, including expected and unexpected paths, is in
 `docs/superpowers/plans/2026-11-05-bugmock-data.md` and at `GET /admin/scenarios/{id}`.
 
+## Agent prompts
+
+System prompts for the four agents are in `prompts/`: `triage.md`, `telios.md`, `kinetics.md` and
+`espida.md`. Each one is self-contained. It covers the agent's role, the team directory (who owns
+what), the Bugmock endpoints it should call, how it works, and the shared message protocol
+(`[ASK]`, `[ANSWER]`, `[NOT MINE]`, `[CLAIM]`, `[REPORT]`) the agents use in a bug's thread.
+
+To use one:
+1. Paste the file into the agent's system prompt.
+2. Give the agent an HTTP tool, or generate tools from `/openapi.json`.
+3. Set `BUGMOCK_URL`, and connect the agent to the bug channel.
+
+`tests/test_prompts.py` fails if a prompt names an endpoint that doesn't exist, or mentions `/admin`.
+
 ## Adding a scenario
 
 1. Copy a file in `data/scenarios/` and give every record a new, unique id.
