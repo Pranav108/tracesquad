@@ -1,0 +1,109 @@
+{
+  "scenarios": [
+    {
+      "scenario_id": "CART-02",
+      "title": "'Something went wrong' at checkout after a coupon",
+      "report_id": "RPT-102",
+      "expected_class": "frontend",
+      "duplicate_of": null,
+      "fix_id": "FIX-CART-02",
+      "expected_path": [
+        "Triage: no duplicate (BUG-1207 is a different issue); unclear class; asks Espida",
+        "Espida: backend 200s plus client crash app.checkout.discount_row_crash -> points to frontend",
+        "Kinetics asks Telios; Telios gets android-18.2 (github_actions, 18 min)",
+        "Telios: create_user android-18.2-PNQ-G3-gold_monthly -> set_address PNQ -> set_group G3 -> activate_plan gold_monthly -> fill_cart R-3391 -> apply_coupon SAVE50 (asks Triage for the code; only the journey has it)",
+        "Kinetics: android-18.2 on redmi-note-10, cart/open + checkout/open -> reproduced; reports to checkout-fe",
+        "After the fix: android-18.6-rc1 -> not_reproduced (fix passes)"
+      ],
+      "unexpected_paths": [
+        "Telios skips the coupon -> not_reproduced",
+        "Kinetics uses an ios build with this android mock user -> 422",
+        "Espida filters source=client -> only the crash entries"
+      ]
+    }
+  ],
+  "reports": [
+    {
+      "report_id": "RPT-102",
+      "scenario_id": "CART-02",
+      "channel": "#app-bugs",
+      "posted_at": "2026-11-04T13:40:00+05:30",
+      "reporter": "@support-agent-1",
+      "user_id": "U-77105",
+      "text": "Checkout shows 'Something went wrong' right after I apply a coupon. Works fine without the coupon. user U-77105",
+      "attachments": []
+    }
+  ],
+  "users": [
+    {
+      "user_id": "U-77105",
+      "name": "Test User 77105",
+      "phone": "+91-90000-07710",
+      "platform": "android",
+      "app_version": "18.2",
+      "device_id": "redmi-note-10",
+      "city": "PNQ",
+      "group": "G3",
+      "plan": "gold_monthly",
+      "plan_status": "active",
+      "cohort_id": "android-18.2-PNQ-G3-gold_monthly",
+      "signup_date": "2024-06-19",
+      "flags": {"checkout_v3": "on"}
+    }
+  ],
+  "journeys": [
+    {
+      "user_id": "U-77105",
+      "events": [
+        {"ts": "2026-11-04T13:31:00+05:30", "screen": "restaurant", "action": "open", "params": {"restaurant_id": "R-3391"}},
+        {"ts": "2026-11-04T13:32:00+05:30", "screen": "restaurant", "action": "add_item", "params": {"item_id": "I-88", "qty": 1}},
+        {"ts": "2026-11-04T13:32:30+05:30", "screen": "restaurant", "action": "add_item", "params": {"item_id": "I-91", "qty": 2}},
+        {"ts": "2026-11-04T13:33:00+05:30", "screen": "cart", "action": "open"},
+        {"ts": "2026-11-04T13:34:00+05:30", "screen": "cart", "action": "apply_coupon", "params": {"code": "SAVE50"}},
+        {"ts": "2026-11-04T13:34:04+05:30", "screen": "checkout", "action": "open"},
+        {"ts": "2026-11-04T13:34:06+05:30", "screen": "checkout", "action": "error_dialog", "params": {"message": "Something went wrong"}},
+        {"ts": "2026-11-04T13:35:00+05:30", "screen": "cart", "action": "open"},
+        {"ts": "2026-11-04T13:36:00+05:30", "screen": "checkout", "action": "open"},
+        {"ts": "2026-11-04T13:36:05+05:30", "screen": "checkout", "action": "error_dialog", "params": {"message": "Something went wrong"}}
+      ]
+    }
+  ],
+  "logs": [
+    {"log_id": "LOG-cart02-1", "ts": "2026-11-04T13:31:20+05:30", "env": "prod", "source": "backend", "service": "restaurant-service", "endpoint": "/restaurants/R-3391/menu", "method": "GET", "status": 200, "level": "warn", "trace_id": "tr-cart02-4", "user_id": "U-77105", "app_version": "18.2", "message": "slow response 2.4s"},
+    {"log_id": "LOG-cart02-2", "ts": "2026-11-04T13:34:02+05:30", "env": "prod", "source": "backend", "service": "cart-service", "endpoint": "/cart/coupon", "method": "POST", "status": 200, "level": "info", "trace_id": "tr-cart02-1", "user_id": "U-77105", "app_version": "18.2", "message": "coupon SAVE50 applied", "response_excerpt": {"code": "SAVE50", "discount": 50}},
+    {"log_id": "LOG-cart02-3", "ts": "2026-11-04T13:34:05+05:30", "env": "prod", "source": "backend", "service": "checkout-service", "endpoint": "/checkout/summary", "method": "GET", "status": 200, "level": "info", "trace_id": "tr-cart02-2", "user_id": "U-77105", "app_version": "18.2", "message": "summary built", "response_excerpt": {"discounts": [{"type": "gold", "label": "Gold discount", "amount": 30}, {"type": "coupon", "code": "SAVE50", "amount": 50}]}},
+    {"log_id": "LOG-cart02-4", "ts": "2026-11-04T13:34:05+05:30", "env": "prod", "source": "client", "service": "android-app", "level": "error", "trace_id": "tr-cart02-2", "user_id": "U-77105", "app_version": "18.2", "message": "TypeError: Cannot read property 'label' of undefined at DiscountRow", "error_signature": "app.checkout.discount_row_crash"},
+    {"log_id": "LOG-cart02-5", "ts": "2026-11-04T13:36:04+05:30", "env": "prod", "source": "client", "service": "android-app", "level": "error", "trace_id": "tr-cart02-3", "user_id": "U-77105", "app_version": "18.2", "message": "TypeError: Cannot read property 'label' of undefined at DiscountRow", "error_signature": "app.checkout.discount_row_crash"}
+  ],
+  "deploys": [
+    {"deploy_id": "DEP-203", "service": "restaurant-service", "version": "2.19.0", "deployed_at": "2026-11-04T11:00:00+05:30", "change": "Menu image CDN switch"}
+  ],
+  "impacts": [
+    {"error_signature": "app.checkout.discount_row_crash", "first_seen": "2026-10-21T09:00:00+05:30", "affected_users": 3410, "by_app_version": {"18.2": 950, "18.3": 1120, "18.4": 820, "18.5": 520}, "note": "Only orders with both a Gold discount and a coupon"}
+  ],
+  "known_bugs": [
+    {"bug_id": "BUG-1207", "title": "SAVE50 not applicable with Gold on orders under ₹199", "status": "wont_fix", "layer": "backend", "affected_platforms": ["android", "ios"], "affected_versions": ["18.4", "18.5"], "affected_os": null, "fixed_in": null, "thread_url": "https://chat.example.invalid/app-bugs/p/1207", "summary": "Working as intended: coupon rules exclude Gold orders below the minimum value.", "error_signature": null}
+  ],
+  "repro_rules": [
+    {
+      "rule_id": "R-CART02",
+      "scenario_id": "CART-02",
+      "trigger": {"screen": "checkout", "action": "open"},
+      "requires_tags": ["plan:gold_monthly", "cart", "coupon:SAVE50"],
+      "affected_builds": ["android-18.2", "android-18.3", "android-18.4", "android-18.5", "ios-18.4", "ios-18.5"],
+      "devices": null,
+      "backend": null,
+      "observed": "Checkout shows a 'Something went wrong' dialog; the discount section never renders",
+      "artifacts": {"video_url": "https://artifacts.example.invalid/cart02-checkout.mp4", "screenshot_url": "https://artifacts.example.invalid/cart02-checkout.png"},
+      "network": [
+        {"method": "POST", "endpoint": "/cart/coupon", "status": 200, "response": {"code": "SAVE50", "discount": 50}},
+        {"method": "GET", "endpoint": "/checkout/summary", "status": 200, "response": {"discounts": [{"type": "gold", "label": "Gold discount", "amount": 30}, {"type": "coupon", "code": "SAVE50", "amount": 50}]}}
+      ],
+      "sandbox_logs": [{"source": "client", "service": "android-app", "level": "error", "message": "TypeError: Cannot read property 'label' of undefined at DiscountRow", "error_signature": "app.checkout.discount_row_crash"}],
+      "sandbox_logs_ok": [{"source": "client", "service": "android-app", "level": "info", "message": "checkout rendered with 2 discount rows"}]
+    }
+  ],
+  "fixes": [
+    {"fix_id": "FIX-CART-02", "bug_ref": "RPT-102", "team_id": "checkout-fe", "layer": "frontend", "title": "Render discount rows when label is missing", "pr_url": "https://git.example.invalid/consumer-app/pull/9921", "ships_in": "android-18.6-rc1"}
+  ]
+}
