@@ -4,11 +4,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, FastAPI, Query, Request
+from fastapi import APIRouter, Body, FastAPI, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from bugmock.errors import ApiError
 from bugmock.models import LogEntry
+from bugmock.sandbox import Sandbox
 from bugmock.store import DATA_DIR, DataError, Store, load_dataset, parse_cohort_id
 
 
@@ -152,6 +154,56 @@ def get_fix(fix_id: str, request: Request) -> dict[str, Any]:
     return _get(_store(request).fixes, fix_id, "fix").model_dump(mode="json")
 
 
+sandbox_routes = APIRouter(prefix="/sandbox", tags=["Telios: sandbox mock users; Teams: sandbox deploys"])
+
+
+class CreateMockUser(BaseModel):
+    cohort_id: str
+
+
+class DeployRequest(BaseModel):
+    service: str
+    version: str
+
+
+def _sandbox(request: Request) -> Sandbox:
+    return request.app.state.sandbox
+
+
+@sandbox_routes.post("/users", summary="Create a mock user for a cohort (setup api create_user)")
+def create_mock_user(body: CreateMockUser, request: Request) -> dict[str, Any]:
+    return _sandbox(request).create_user(body.cohort_id).model_dump()
+
+
+@sandbox_routes.post(
+    "/users/{mock_user_id}/setup/{api_name}",
+    summary="Run one setup api on a mock user; body is that api's params (see GET /setup-apis)",
+)
+def apply_setup(mock_user_id: str, api_name: str, request: Request, params: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    return _sandbox(request).apply(mock_user_id, api_name, params).model_dump()
+
+
+@sandbox_routes.get("/users/{mock_user_id}", summary="A mock user: login, tags (its state) and the setup calls made")
+def get_mock_user(mock_user_id: str, request: Request) -> dict[str, Any]:
+    return _sandbox(request).get(mock_user_id).model_dump()
+
+
+@sandbox_routes.post("/deploy", summary="Deploy a service version to the sandbox (e.g. a backend fix)")
+def deploy(body: DeployRequest, request: Request) -> dict[str, str]:
+    return _sandbox(request).deploy(body.service, body.version)
+
+
+@sandbox_routes.get("/services", summary="Service versions currently running in the sandbox")
+def get_services(request: Request) -> dict[str, str]:
+    return dict(_sandbox(request).services)
+
+
+@sandbox_routes.post("/reset", summary="Admin: clear mock users, sandbox logs and service versions")
+def reset_sandbox(request: Request) -> dict[str, bool]:
+    _sandbox(request).reset()
+    return {"reset": True}
+
+
 @admin.get("/scenarios", summary="All scenarios with expected class and path")
 def list_scenarios(request: Request) -> list[dict[str, Any]]:
     return [s.model_dump(mode="json") for s in _store(request).scenarios.values()]
@@ -183,12 +235,13 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
         version="0.1.0",
     )
     app.state.store = Store(load_dataset(data_dir))
+    app.state.sandbox = Sandbox(app.state.store)
 
     @app.exception_handler(ApiError)
     async def handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
-    for router in (triage, espida, telios, teams, admin):
+    for router in (triage, espida, telios, sandbox_routes, teams, admin):
         app.include_router(router)
     return app
 
