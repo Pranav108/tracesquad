@@ -1,0 +1,95 @@
+{
+  "scenarios": [
+    {
+      "scenario_id": "PAY-04",
+      "title": "UPI payment stuck on 'Processing'",
+      "report_id": "RPT-104",
+      "expected_class": "duplicate",
+      "duplicate_of": "BUG-1152",
+      "fix_id": "FIX-PAY-04",
+      "expected_path": [
+        "Triage: matches BUG-1152 (android, app 18.3 affected, device on Android 14, fixed in 18.4)",
+        "Triage replies: known issue BUG-1152, fixed in 18.4, please update; links the thread. Done."
+      ],
+      "unexpected_paths": [
+        "Espida finds signature app.payment.upi_intent_timeout, same as BUG-1152",
+        "Telios: create_user android-18.3-BOM-G2-none -> set_address BOM -> set_group G2 -> add_payment_method upi -> fill_cart R-1200; Kinetics android-18.3 on galaxy-m32, checkout/open + payment/pay_upi -> reproduced",
+        "android-18.4 -> not_reproduced (confirms the update advice)",
+        "redmi-note-10 (Android 12) -> not_reproduced"
+      ]
+    }
+  ],
+  "reports": [
+    {
+      "report_id": "RPT-104",
+      "scenario_id": "PAY-04",
+      "channel": "#app-bugs",
+      "posted_at": "2026-11-04T21:20:00+05:30",
+      "reporter": "@support-agent-1",
+      "user_id": "U-61540",
+      "text": "UPI payment keeps spinning on 'Processing', had to cancel the order. user U-61540",
+      "attachments": []
+    }
+  ],
+  "users": [
+    {
+      "user_id": "U-61540",
+      "name": "Test User 61540",
+      "phone": "+91-90000-06154",
+      "platform": "android",
+      "app_version": "18.3",
+      "device_id": "galaxy-m32",
+      "city": "BOM",
+      "group": "G2",
+      "plan": "none",
+      "plan_status": "none",
+      "cohort_id": "android-18.3-BOM-G2-none",
+      "signup_date": "2025-03-02",
+      "flags": {}
+    }
+  ],
+  "journeys": [
+    {
+      "user_id": "U-61540",
+      "events": [
+        {"ts": "2026-11-04T21:12:00+05:30", "screen": "cart", "action": "open", "params": {"restaurant_id": "R-1200"}},
+        {"ts": "2026-11-04T21:13:00+05:30", "screen": "checkout", "action": "open"},
+        {"ts": "2026-11-04T21:13:08+05:30", "screen": "payment", "action": "pay_upi", "params": {"amount": 412}},
+        {"ts": "2026-11-04T21:13:10+05:30", "screen": "payment", "action": "processing"},
+        {"ts": "2026-11-04T21:16:15+05:30", "screen": "payment", "action": "cancel"},
+        {"ts": "2026-11-04T21:17:00+05:30", "screen": "help", "action": "open"}
+      ]
+    }
+  ],
+  "logs": [
+    {"log_id": "LOG-pay04-1", "ts": "2026-11-04T21:13:10+05:30", "env": "prod", "source": "backend", "service": "payment-service", "endpoint": "/payments/upi/intent", "method": "POST", "status": 200, "level": "info", "trace_id": "tr-pay04-1", "user_id": "U-61540", "app_version": "18.3", "message": "intent created", "response_excerpt": {"intent_id": "UPI-55102", "amount": 412}},
+    {"log_id": "LOG-pay04-2", "ts": "2026-11-04T21:16:10+05:30", "env": "prod", "source": "client", "service": "android-app", "level": "warn", "trace_id": "tr-pay04-1", "user_id": "U-61540", "app_version": "18.3", "message": "upi_intent_timeout after 180s", "error_signature": "app.payment.upi_intent_timeout"},
+    {"log_id": "LOG-pay04-3", "ts": "2026-11-04T21:16:20+05:30", "env": "prod", "source": "backend", "service": "payment-service", "endpoint": "/payments/cancel", "method": "POST", "status": 200, "level": "info", "trace_id": "tr-pay04-2", "user_id": "U-61540", "app_version": "18.3", "message": "payment cancelled by user"}
+  ],
+  "impacts": [
+    {"error_signature": "app.payment.upi_intent_timeout", "first_seen": "2026-09-30T10:00:00+05:30", "affected_users": 610, "by_app_version": {"18.2": 180, "18.3": 430}, "note": "No occurrences on 18.4+"}
+  ],
+  "known_bugs": [
+    {"bug_id": "BUG-1152", "title": "UPI payment stuck on 'Processing' on Android 14", "status": "fixed", "layer": "frontend", "affected_platforms": ["android"], "affected_versions": ["18.2", "18.3"], "affected_os": ["14"], "fixed_in": "18.4", "thread_url": "https://chat.example.invalid/app-bugs/p/1152", "summary": "On Android 14 the UPI intent result never reached the app, so payment spun on 'Processing' until timeout.", "error_signature": "app.payment.upi_intent_timeout"},
+    {"bug_id": "BUG-1166", "title": "Card payments failing for one issuer bank", "status": "fixed", "layer": "backend", "affected_platforms": ["android", "ios"], "affected_versions": ["18.4", "18.5"], "affected_os": null, "fixed_in": "payment-service@9.0.2", "thread_url": "https://chat.example.invalid/app-bugs/p/1166", "summary": "Issuer BIN range missing from the routing table; card payments for that bank were declined.", "error_signature": "payment.card_routing_missing_bin"}
+  ],
+  "repro_rules": [
+    {
+      "rule_id": "R-PAY04",
+      "scenario_id": "PAY-04",
+      "trigger": {"screen": "payment", "action": "pay_upi"},
+      "requires_tags": ["cart", "payment_method:upi"],
+      "affected_builds": ["android-18.2", "android-18.3"],
+      "devices": ["galaxy-m32", "pixel-7"],
+      "backend": null,
+      "observed": "Payment stays on 'Processing' for 3 minutes, then times out",
+      "artifacts": {"video_url": "https://artifacts.example.invalid/pay04-upi.mp4"},
+      "network": [{"method": "POST", "endpoint": "/payments/upi/intent", "status": 200, "response": {"intent_id": "UPI-SBX-1"}}],
+      "sandbox_logs": [{"source": "client", "service": "android-app", "level": "warn", "message": "upi_intent_timeout after 180s", "error_signature": "app.payment.upi_intent_timeout"}],
+      "sandbox_logs_ok": [{"source": "client", "service": "android-app", "level": "info", "message": "upi intent result received"}]
+    }
+  ],
+  "fixes": [
+    {"fix_id": "FIX-PAY-04", "bug_ref": "BUG-1152", "team_id": "checkout-fe", "layer": "frontend", "title": "Handle UPI intent result on Android 14", "pr_url": "https://git.example.invalid/consumer-app/pull/9655", "ships_in": "android-18.4"}
+  ]
+}
