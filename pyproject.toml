@@ -24,3 +24,5 @@ packages = ["bugmock"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Starlette's TestClient warns that it prefers `httpx2`; httpx still works and is what we depend on.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
