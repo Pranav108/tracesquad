@@ -1,0 +1,106 @@
+{
+  "scenarios": [
+    {
+      "scenario_id": "TRACK-05",
+      "title": "Order tracking screen blank after a backend change",
+      "report_id": "RPT-105",
+      "expected_class": "both",
+      "duplicate_of": null,
+      "fix_id": "FIX-TRACK-05",
+      "expected_path": [
+        "Triage: no duplicate (BUG-1190 is the map); unclear class; asks Espida",
+        "Espida: backend 200 with schema v2, client TypeError app.tracking.eta_type_error, DEP-205, impact only on 18.2-18.3 -> both: backend broke the contract for old clients",
+        "logistics-be fixes (orders-fe informed); POST /sandbox/deploy order-tracking-service 5.3.1",
+        "Telios: create_user android-18.3-HYD-G4-gold_trial -> set_address HYD -> set_group G4 -> activate_plan gold_trial -> add_payment_method upi -> place_order R-7781",
+        "Kinetics: android-18.3, order_tracking/open -> not_reproduced (fix passes)",
+        "Espida: sandbox logs show schema_version 1"
+      ],
+      "unexpected_paths": [
+        "Before the fix, android-18.4 -> not_reproduced (clue: newer apps cope)",
+        "Telios skips place_order -> not_reproduced",
+        "place_order before add_payment_method -> 409"
+      ]
+    }
+  ],
+  "reports": [
+    {
+      "report_id": "RPT-105",
+      "scenario_id": "TRACK-05",
+      "channel": "#app-bugs",
+      "posted_at": "2026-11-04T20:45:00+05:30",
+      "reporter": "@support-agent-1",
+      "user_id": "U-90877",
+      "text": "Track order screen is completely blank. Ordered 20 minutes ago and can't see where it is. user U-90877",
+      "attachments": []
+    }
+  ],
+  "users": [
+    {
+      "user_id": "U-90877",
+      "name": "Test User 90877",
+      "phone": "+91-90000-09087",
+      "platform": "android",
+      "app_version": "18.3",
+      "device_id": "oneplus-nord",
+      "city": "HYD",
+      "group": "G4",
+      "plan": "gold_trial",
+      "plan_status": "active",
+      "cohort_id": "android-18.3-HYD-G4-gold_trial",
+      "signup_date": "2024-11-30",
+      "flags": {}
+    }
+  ],
+  "journeys": [
+    {
+      "user_id": "U-90877",
+      "events": [
+        {"ts": "2026-11-04T20:24:00+05:30", "screen": "checkout", "action": "place_order", "params": {"order_id": "O-551203", "restaurant_id": "R-7781"}},
+        {"ts": "2026-11-04T20:25:00+05:30", "screen": "order_tracking", "action": "open", "params": {"order_id": "O-551203"}},
+        {"ts": "2026-11-04T20:25:04+05:30", "screen": "order_tracking", "action": "blank_screen"},
+        {"ts": "2026-11-04T20:31:00+05:30", "screen": "order_tracking", "action": "open", "params": {"order_id": "O-551203"}},
+        {"ts": "2026-11-04T20:31:03+05:30", "screen": "order_tracking", "action": "blank_screen"},
+        {"ts": "2026-11-04T20:44:00+05:30", "screen": "help", "action": "open"}
+      ]
+    }
+  ],
+  "logs": [
+    {"log_id": "LOG-track05-1", "ts": "2026-11-04T20:25:03+05:30", "env": "prod", "source": "backend", "service": "order-tracking-service", "endpoint": "/orders/O-551203/track", "method": "GET", "status": 200, "level": "info", "trace_id": "tr-track05-1", "user_id": "U-90877", "app_version": "18.3", "message": "tracking served", "response_excerpt": {"schema_version": 2, "eta": {"min": 25, "max": 35}, "status": "preparing"}},
+    {"log_id": "LOG-track05-2", "ts": "2026-11-04T20:25:03+05:30", "env": "prod", "source": "client", "service": "android-app", "level": "error", "trace_id": "tr-track05-1", "user_id": "U-90877", "app_version": "18.3", "message": "TypeError: eta.toFixed is not a function at TrackingHeader", "error_signature": "app.tracking.eta_type_error"},
+    {"log_id": "LOG-track05-3", "ts": "2026-11-04T20:31:02+05:30", "env": "prod", "source": "backend", "service": "order-tracking-service", "endpoint": "/orders/O-551203/track", "method": "GET", "status": 200, "level": "info", "trace_id": "tr-track05-2", "user_id": "U-90877", "app_version": "18.3", "message": "tracking served", "response_excerpt": {"schema_version": 2, "eta": {"min": 20, "max": 30}, "status": "preparing"}},
+    {"log_id": "LOG-track05-4", "ts": "2026-11-04T20:31:02+05:30", "env": "prod", "source": "client", "service": "android-app", "level": "error", "trace_id": "tr-track05-2", "user_id": "U-90877", "app_version": "18.3", "message": "TypeError: eta.toFixed is not a function at TrackingHeader", "error_signature": "app.tracking.eta_type_error"}
+  ],
+  "deploys": [
+    {"deploy_id": "DEP-205", "service": "order-tracking-service", "version": "5.3.0", "deployed_at": "2026-11-04T11:30:00+05:30", "change": "ETA returned as a range {min, max} (schema v2) for all clients"}
+  ],
+  "impacts": [
+    {"error_signature": "app.tracking.eta_type_error", "first_seen": "2026-11-04T11:34:00+05:30", "affected_users": 9870, "by_app_version": {"18.2": 3100, "18.3": 6770}, "note": "No occurrences on 18.4+"}
+  ],
+  "known_bugs": [
+    {"bug_id": "BUG-1190", "title": "Tracking map not loading on slow networks", "status": "open", "layer": "frontend", "affected_platforms": ["android"], "affected_versions": ["18.4", "18.5"], "affected_os": null, "fixed_in": null, "thread_url": "https://chat.example.invalid/app-bugs/p/1190", "summary": "Map tiles time out on 2G/3G; ETA and status still render.", "error_signature": null}
+  ],
+  "repro_rules": [
+    {
+      "rule_id": "R-TRACK05",
+      "scenario_id": "TRACK-05",
+      "trigger": {"screen": "order_tracking", "action": "open"},
+      "requires_tags": ["order:active"],
+      "affected_builds": ["android-18.2", "android-18.3"],
+      "devices": null,
+      "backend": {"service": "order-tracking-service", "versions": ["5.3.0"]},
+      "observed": "Tracking screen renders blank white; no ETA, no map",
+      "artifacts": {"video_url": "https://artifacts.example.invalid/track05-blank.mp4", "screenshot_url": "https://artifacts.example.invalid/track05-blank.png"},
+      "network": [{"method": "GET", "endpoint": "/orders/{order_id}/track", "status": 200, "response": {"schema_version": 2, "eta": {"min": 25, "max": 35}, "status": "preparing"}}],
+      "sandbox_logs": [
+        {"source": "backend", "service": "order-tracking-service", "endpoint": "/orders/{order_id}/track", "method": "GET", "status": 200, "level": "info", "message": "tracking served", "response_excerpt": {"schema_version": 2, "eta": {"min": 25, "max": 35}, "status": "preparing"}},
+        {"source": "client", "service": "android-app", "level": "error", "message": "TypeError: eta.toFixed is not a function at TrackingHeader", "error_signature": "app.tracking.eta_type_error"}
+      ],
+      "sandbox_logs_ok": [
+        {"source": "backend", "service": "order-tracking-service", "endpoint": "/orders/{order_id}/track", "method": "GET", "status": 200, "level": "info", "message": "tracking served", "response_excerpt": {"schema_version": 1, "eta": 30, "status": "preparing"}}
+      ]
+    }
+  ],
+  "fixes": [
+    {"fix_id": "FIX-TRACK-05", "bug_ref": "RPT-105", "team_id": "logistics-be", "layer": "backend", "title": "Serve tracking schema v1 to app versions below 18.4", "pr_url": "https://git.example.invalid/order-tracking-service/pull/731", "ships_in": "order-tracking-service@5.3.1"}
+  ]
+}
