@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from bugmock.errors import ApiError
 from bugmock.models import LogEntry
+from bugmock.repro import ReproRequest, run_repro
 from bugmock.sandbox import Sandbox
 from bugmock.store import DATA_DIR, DataError, Store, load_dataset, parse_cohort_id
 
@@ -204,6 +205,19 @@ def reset_sandbox(request: Request) -> dict[str, bool]:
     return {"reset": True}
 
 
+kinetics = APIRouter(tags=["Kinetics: devices and repro runs"])
+
+
+@kinetics.get("/devices", summary="Devices Kinetics can run builds on")
+def list_devices(request: Request) -> list[dict[str, Any]]:
+    return [d.model_dump(mode="json") for d in _store(request).devices.values()]
+
+
+@kinetics.post("/repro/runs", summary="Install a build on a device, log in as a mock user, follow the steps")
+def post_repro_run(body: ReproRequest, request: Request) -> dict[str, Any]:
+    return run_repro(body, _store(request), _sandbox(request)).model_dump()
+
+
 @admin.get("/scenarios", summary="All scenarios with expected class and path")
 def list_scenarios(request: Request) -> list[dict[str, Any]]:
     return [s.model_dump(mode="json") for s in _store(request).scenarios.values()]
@@ -241,7 +255,7 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
     async def handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
-    for router in (triage, espida, telios, sandbox_routes, teams, admin):
+    for router in (triage, espida, telios, sandbox_routes, kinetics, teams, admin):
         app.include_router(router)
     return app
 
