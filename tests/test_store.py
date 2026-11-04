@@ -76,3 +76,14 @@ def test_store_indexes_shared_data():
     assert s.builds["android-18.2"].source == "github_actions"
     assert s.setup_apis["place_order"].requires == ["address", "payment_method"]
     assert s.dataset.sandbox_defaults["membership-service"] == "3.12.0"
+
+
+def test_gold01_records():
+    s = Store(load_dataset(DATA_DIR))
+    assert s.users["U-48213"].cohort_id == "android-18.5-DEL-G7-gold_annual"
+    assert s.reports["RPT-101"].user_id == "U-48213"
+    assert s.scenarios["GOLD-01"].expected_class == "backend"
+    assert any(l.error_signature == "membership.stale_status_after_renewal" for l in s.logs)
+    assert [d.version for d in s.deploys if d.deploy_id == "DEP-201"] == ["3.12.0"]
+    assert s.fixes["FIX-GOLD-01"].ships_in == "membership-service@3.12.1"
+    assert s.known_bugs["BUG-1180"].status == "fixed"
