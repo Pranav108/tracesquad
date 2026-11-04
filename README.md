@@ -38,10 +38,14 @@ Tests: `uv run pytest`
 | Kinetics | `GET /devices` | Devices to run on |
 | Kinetics | `POST /repro/runs` `{build_id, mock_user_id, device_id, steps}` | `reproduced` / `not_reproduced`, what was seen, artifacts, network calls |
 | Teams | `GET /teams` | Teams and what they own |
-| Teams | `GET /fixes?bug_ref=`, `GET /fixes/{fix_id}` | Fixes: team, PR, where it ships |
+| Teams | `GET /fixes?bug_ref=`, `GET /fixes/{fix_id}` | Published fixes: team, PR, where it ships |
+| Teams | `POST /fixes/{fix_id}/publish` | Announces a fix (call this when simulating "the team fixed it"; reset hides it again) |
 | Teams | `POST /sandbox/deploy` `{service, version}`, `GET /sandbox/services` | Sandbox service versions |
 | Admin | `GET /admin/scenarios`, `GET /admin/scenarios/{scenario_id}` | Scenarios with expected answers (do not give these to agents) |
-| Admin | `POST /sandbox/reset` | Clears the sandbox |
+| Admin | `POST /sandbox/reset` | Clears the sandbox and unpublishes fixes |
+
+Admin routes and `/sandbox/reset` are left out of `/openapi.json`, so tools generated from it never
+reach the answers or wipe the sandbox.
 
 Errors are `{"detail": "..."}`. 404 means an unknown id, 409 means a setup prerequisite is missing,
 and 422 means bad params or a platform mismatch.

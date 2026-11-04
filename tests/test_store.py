@@ -19,6 +19,7 @@ def make_user(**overrides) -> dict:
         "app_version": "18.5",
         "device_id": "pixel-7",
         "city": "DEL",
+        "area": "Saket",
         "group": "G7",
         "plan": "gold_annual",
         "plan_status": "active",

@@ -85,6 +85,7 @@ class User(BaseModel):
     app_version: str
     device_id: str
     city: str
+    area: str
     group: str
     plan: str
     plan_status: Literal["active", "expired", "none"]
@@ -185,6 +186,8 @@ class Fix(BaseModel):
     title: str
     pr_url: str
     ships_in: str
+    # True for fixes that already shipped before the scenario (visible from the start)
+    published: bool = False
 
 
 class Scenario(BaseModel):

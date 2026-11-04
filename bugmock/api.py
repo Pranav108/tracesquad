@@ -25,6 +25,20 @@ def _get(index: dict, key: str, what: str):
     return index[key]
 
 
+def _parse_time(value: str | None, name: str) -> datetime | None:
+    if value is None:
+        return None
+    # An unencoded "+05:30" in a query string arrives as " 05:30"; put the plus back.
+    text = value.strip().replace(" ", "+")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ApiError(422, f"'{name}' is not an ISO 8601 time: '{value}'") from exc
+    if parsed.tzinfo is None:
+        raise ApiError(422, f"'{name}' needs a timezone offset, e.g. 2026-11-04T04:00:00Z or +05:30")
+    return parsed
+
+
 def _sandbox_logs(request: Request) -> list[LogEntry]:
     sandbox = getattr(request.app.state, "sandbox", None)
     return list(sandbox.logs) if sandbox is not None else []
@@ -34,7 +48,9 @@ triage = APIRouter(tags=["Triage: reports, known bugs, users, journeys, cohorts"
 espida = APIRouter(tags=["Espida: logs, traces, deploys, impact"])
 telios = APIRouter(tags=["Telios: builds and setup API catalog"])
 teams = APIRouter(tags=["Teams: owners and fixes"])
-admin = APIRouter(prefix="/admin", tags=["Admin: scenarios with expected answers (not for agents)"])
+admin = APIRouter(
+    prefix="/admin", tags=["Admin: scenarios with expected answers (not for agents)"], include_in_schema=False
+)
 
 
 @triage.get("/reports/{report_id}", summary="A Slack bug report")
@@ -89,9 +105,10 @@ def get_logs(
     env: Literal["prod", "sandbox"] = "prod",
     source: Literal["backend", "client"] | None = None,
     service: str | None = None,
-    from_: datetime | None = Query(None, alias="from"),
-    to: datetime | None = None,
+    from_raw: str | None = Query(None, alias="from", description="ISO 8601 with offset, e.g. 2026-11-04T04:00:00Z"),
+    to_raw: str | None = Query(None, alias="to", description="ISO 8601 with offset, e.g. 2026-11-04T05:00:00Z"),
 ) -> list[dict[str, Any]]:
+    from_, to = _parse_time(from_raw, "from"), _parse_time(to_raw, "to")
     entries = _store(request).logs if env == "prod" else _sandbox_logs(request)
     selected = [
         e for e in entries
@@ -144,15 +161,32 @@ def list_teams(request: Request) -> list[dict[str, Any]]:
     return [t.model_dump(mode="json") for t in _store(request).teams.values()]
 
 
-@teams.get("/fixes", summary="Fixes, optionally for one bug (known bug id or report id)")
+def _published(request: Request) -> set[str]:
+    return request.app.state.sandbox.published_fixes
+
+
+@teams.get("/fixes", summary="Published fixes, optionally for one bug (known bug id or report id)")
 def list_fixes(request: Request, bug_ref: str | None = None) -> list[dict[str, Any]]:
-    fixes = [f for f in _store(request).fixes.values() if bug_ref is None or f.bug_ref == bug_ref]
-    return [f.model_dump(mode="json") for f in fixes]
+    published = _published(request)
+    fixes = [
+        f for f in _store(request).fixes.values()
+        if f.fix_id in published and (bug_ref is None or f.bug_ref == bug_ref)
+    ]
+    return [f.model_dump(mode="json", exclude={"published"}) for f in fixes]
 
 
-@teams.get("/fixes/{fix_id}", summary="One fix: team, PR and where it ships")
+@teams.get("/fixes/{fix_id}", summary="One published fix: team, PR and where it ships")
 def get_fix(fix_id: str, request: Request) -> dict[str, Any]:
-    return _get(_store(request).fixes, fix_id, "fix").model_dump(mode="json")
+    if fix_id not in _published(request):
+        raise ApiError(404, f"fix '{fix_id}' not found (or not published yet)")
+    return _store(request).fixes[fix_id].model_dump(mode="json", exclude={"published"})
+
+
+@teams.post("/fixes/{fix_id}/publish", summary="Teams: announce a fix so agents can see it")
+def publish_fix(fix_id: str, request: Request) -> dict[str, Any]:
+    fix = _get(_store(request).fixes, fix_id, "fix")
+    _published(request).add(fix_id)
+    return fix.model_dump(mode="json", exclude={"published"})
 
 
 sandbox_routes = APIRouter(prefix="/sandbox", tags=["Telios: sandbox mock users; Teams: sandbox deploys"])
@@ -199,7 +233,9 @@ def get_services(request: Request) -> dict[str, str]:
     return dict(_sandbox(request).services)
 
 
-@sandbox_routes.post("/reset", summary="Admin: clear mock users, sandbox logs and service versions")
+@sandbox_routes.post(
+    "/reset", summary="Admin: clear mock users, sandbox logs and service versions", include_in_schema=False
+)
 def reset_sandbox(request: Request) -> dict[str, bool]:
     _sandbox(request).reset()
     return {"reset": True}

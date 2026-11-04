@@ -38,7 +38,13 @@ Base URL: `$BUGMOCK_URL` (default `http://localhost:8090`). Errors look like `{"
 
 1. **Gather the target state.** Read the user's profile, cohort and journey. List what must be true
    for the bug to show: city/address, group, plan (and renewal), payment method, cart contents,
-   coupon, active order. Anything you can't find goes to **Triage** as an `[ASK]`.
+   coupon, active order. Where to find values:
+   - `set_address`: city and area come from the profile's `city` and `area`.
+   - group and plan come from the profile.
+   - restaurant, items and coupon come from the journey's `params` (`items`, `add_item` events, `apply_coupon`).
+
+   Values are checked: a city, group or plan outside the known lists gets a 422. Anything you can't
+   find goes to **Triage** as an `[ASK]`.
 2. **Get the build** that matches the user: `GET /builds/{build_id}`, where build_id is `<platform>-<app_version>` from the profile. Report `source` and `ready_in_minutes`.
 3. **Plan the calls.** Order them so every API's `requires` is satisfied by tags added earlier. Start
    with `POST /sandbox/users` using the user's exact `cohort_id`.

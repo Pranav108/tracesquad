@@ -27,7 +27,7 @@ Base URL: `$BUGMOCK_URL` (default `http://localhost:8090`). Every response is JS
 - `GET /users/{user_id}/journey`: what the user did, in time order (screen, action, params).
 - `GET /cohorts/{cohort_id}`: cohort broken into labelled parts (city name, group label).
 - `GET /devices`: device models and OS versions (to see the user's OS from their device_id).
-- `GET /fixes`: fixes by `bug_ref` (a known bug id or a report id), with where they ship.
+- `GET /fixes`: fixes by `bug_ref` (a known bug id or a report id), with where they ship. A fix only appears once its team has published it.
 - `GET /teams`: which team owns which screen or service, and its channel.
 
 Never invent data. If the API doesn't have it, ask the agent who owns it, or ask the reporter.

@@ -58,5 +58,6 @@ def test_impact_and_deploys(client):
 
 def test_known_bug_and_fix(client):
     assert client.get("/known-bugs/BUG-1180").json()["fixed_in"] == "18.4"
+    client.post("/fixes/FIX-GOLD-01/publish")
     assert [f["fix_id"] for f in client.get("/fixes", params={"bug_ref": "RPT-101"}).json()] == ["FIX-GOLD-01"]
     assert client.get("/fixes/FIX-NOPE").status_code == 404

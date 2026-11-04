@@ -26,7 +26,7 @@ Base URL: `$BUGMOCK_URL` (default `http://localhost:8090`). Errors look like `{"
   - `env=prod` (default) or `env=sandbox`
   - `source=backend|client`
   - `service`
-  - `from` and `to` (ISO 8601 with offset, e.g. `2026-11-04T09:30:00+05:30`)
+  - `from` and `to`: ISO 8601 with an offset. Prefer UTC, e.g. `2026-11-04T04:00:00Z`. If you use `+05:30`, URL-encode the `+` as `%2B`. A time with no offset is rejected with 422.
 
   Results are sorted by time. Each entry has `service`, `endpoint`, `status`, `level`, `message`, `trace_id`, `app_version`, `error_signature` and `response_excerpt`.
 - `GET /traces/{trace_id}`: every log line for one request, across services.

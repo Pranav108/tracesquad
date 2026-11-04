@@ -40,6 +40,7 @@
       "app_version": "18.3",
       "device_id": "galaxy-m32",
       "city": "BOM",
+      "area": "Andheri",
       "group": "G2",
       "plan": "none",
       "plan_status": "none",
@@ -52,7 +53,7 @@
     {
       "user_id": "U-61540",
       "events": [
-        {"ts": "2026-11-04T21:12:00+05:30", "screen": "cart", "action": "open", "params": {"restaurant_id": "R-1200"}},
+        {"ts": "2026-11-04T21:12:00+05:30", "screen": "cart", "action": "open", "params": {"restaurant_id": "R-1200", "items": [{"item_id": "I-12", "qty": 1}]}},
         {"ts": "2026-11-04T21:13:00+05:30", "screen": "checkout", "action": "open"},
         {"ts": "2026-11-04T21:13:08+05:30", "screen": "payment", "action": "pay_upi", "params": {"amount": 412}},
         {"ts": "2026-11-04T21:13:10+05:30", "screen": "payment", "action": "processing"},
@@ -90,6 +91,6 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-PAY-04", "bug_ref": "BUG-1152", "team_id": "checkout-fe", "layer": "frontend", "title": "Handle UPI intent result on Android 14", "pr_url": "https://git.example.invalid/consumer-app/pull/9655", "ships_in": "android-18.4"}
+    {"fix_id": "FIX-PAY-04", "bug_ref": "BUG-1152", "team_id": "checkout-fe", "layer": "frontend", "title": "Handle UPI intent result on Android 14", "pr_url": "https://git.example.invalid/consumer-app/pull/9655", "ships_in": "android-18.4", "published": true}
   ]
 }

@@ -43,6 +43,7 @@
       "app_version": "18.3",
       "device_id": "oneplus-nord",
       "city": "HYD",
+      "area": "Madhapur",
       "group": "G4",
       "plan": "gold_trial",
       "plan_status": "active",
@@ -55,7 +56,7 @@
     {
       "user_id": "U-90877",
       "events": [
-        {"ts": "2026-11-04T20:24:00+05:30", "screen": "checkout", "action": "place_order", "params": {"order_id": "O-551203", "restaurant_id": "R-7781"}},
+        {"ts": "2026-11-04T20:24:00+05:30", "screen": "checkout", "action": "place_order", "params": {"order_id": "O-551203", "restaurant_id": "R-7781", "items": [{"item_id": "I-301", "qty": 1}]}},
         {"ts": "2026-11-04T20:25:00+05:30", "screen": "order_tracking", "action": "open", "params": {"order_id": "O-551203"}},
         {"ts": "2026-11-04T20:25:04+05:30", "screen": "order_tracking", "action": "blank_screen"},
         {"ts": "2026-11-04T20:31:00+05:30", "screen": "order_tracking", "action": "open", "params": {"order_id": "O-551203"}},

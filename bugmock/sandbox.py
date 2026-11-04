@@ -36,6 +36,7 @@ class Sandbox:
         self.users: dict[str, MockUser] = {}
         self.logs: list[LogEntry] = []
         self.services: dict[str, str] = dict(self.store.dataset.sandbox_defaults)
+        self.published_fixes: set[str] = {f.fix_id for f in self.store.dataset.fixes if f.published}
         self._user_seq = 0
         self._run_seq = 0
 
@@ -72,6 +73,7 @@ class Sandbox:
         missing = [p for p in api.params if p not in params]
         if missing:
             raise ApiError(422, f"setup api '{api_name}' is missing params: {', '.join(missing)}")
+        self._check_values(api_name, list(api.params), params)
         for requirement in api.requires:
             if not has_tag(user.tags, requirement):
                 raise ApiError(
@@ -82,6 +84,26 @@ class Sandbox:
                 user.tags.append(tag)
         user.calls.append({"api": api_name, "params": params})
         return user
+
+    def _check_values(self, api_name: str, names: list[str], params: dict[str, Any]) -> None:
+        dims = self.store.dataset.cohort_dimensions
+        allowed = {
+            "city": list(dims.cities),
+            "group": list(dims.groups),
+            "plan": [p for p in dims.plans if p != "none"],
+            "type": ["upi", "card"],
+        }
+        for name in names:
+            value = params[name]
+            if name == "items":
+                if not (isinstance(value, list) and value and all(isinstance(i, dict) and "item_id" in i for i in value)):
+                    raise ApiError(422, f"setup api '{api_name}': param 'items' must be a non-empty list of {{item_id, qty}}")
+            elif not isinstance(value, str) or not value:
+                raise ApiError(422, f"setup api '{api_name}': param '{name}' must be a non-empty string")
+            elif name in allowed and value not in allowed[name]:
+                raise ApiError(
+                    422, f"setup api '{api_name}': {name} '{value}' is not one of {', '.join(allowed[name])}"
+                )
 
     def _provider_of(self, requirement: str) -> str:
         for api in self.store.setup_apis.values():

@@ -33,7 +33,7 @@ Base URL: `$BUGMOCK_URL` (default `http://localhost:8090`). Errors look like `{"
   (video and screenshot links) and `network` (calls the app made). A 422 means the build, device and
   mock user are not all on the same platform.
 - `GET /users/{user_id}`, `GET /users/{user_id}/journey`: read the real user's device and steps yourself before asking Triage.
-- `GET /fixes`, `GET /fixes/{fix_id}`: which build a frontend fix ships in.
+- `GET /fixes`, `GET /fixes/{fix_id}`: which build a frontend fix ships in. A fix only appears once its team has published it.
 
 ## Reproducing a bug
 

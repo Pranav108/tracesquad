@@ -75,11 +75,15 @@ def run_repro(req: ReproRequest, store: Store, sandbox: Sandbox) -> ReproResult:
     for rule in store.repro_rules:
         if not any(step_matches(step, rule.trigger) for step in req.steps):
             continue
+        state_ok = all(has_tag(user.tags, tag) for tag in rule.requires_tags)
+        if not state_ok:
+            # The user never reached the state this flow needs, so we can't say what the backend did.
+            continue
+        backend_buggy = rule.backend is not None and sandbox.services.get(rule.backend.service) in rule.backend.versions
         reproduces = (
-            all(has_tag(user.tags, tag) for tag in rule.requires_tags)
-            and ("*" in rule.affected_builds or build.build_id in rule.affected_builds)
+            ("*" in rule.affected_builds or build.build_id in rule.affected_builds)
             and (rule.devices is None or device.device_id in rule.devices)
-            and (rule.backend is None or sandbox.services.get(rule.backend.service) in rule.backend.versions)
+            and (rule.backend is None or backend_buggy)
         )
         if reproduces:
             _write_logs(sandbox, rule.sandbox_logs, run_id, user, build)
@@ -90,7 +94,12 @@ def run_repro(req: ReproRequest, store: Store, sandbox: Sandbox) -> ReproResult:
                 artifacts=rule.artifacts,
                 network=rule.network,
             )
-        _write_logs(sandbox, rule.sandbox_logs_ok, run_id, user, build)
+        if backend_buggy:
+            # The client copes, but the backend still behaves as before: log only its side.
+            backend_side = [t for t in rule.sandbox_logs if t.source == "backend"]
+            _write_logs(sandbox, backend_side, run_id, user, build)
+        else:
+            _write_logs(sandbox, rule.sandbox_logs_ok, run_id, user, build)
 
     return ReproResult(
         run_id=run_id,
