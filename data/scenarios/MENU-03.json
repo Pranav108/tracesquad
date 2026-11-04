@@ -1,0 +1,90 @@
+{
+  "scenarios": [
+    {
+      "scenario_id": "MENU-03",
+      "title": "Restaurant name overlaps the rating badge",
+      "report_id": "RPT-103",
+      "expected_class": "ui",
+      "duplicate_of": null,
+      "fix_id": "FIX-MENU-03",
+      "expected_path": [
+        "Triage: no duplicate; classifies ui",
+        "Telios: gets ios-18.5 (s3, ready now); create_user ios-18.5-BLR-G1-none -> set_address BLR -> set_group G1",
+        "Kinetics: ios-18.5 on iphone-se-2, restaurant/open R-5520 -> reproduced; reports to discovery-fe",
+        "After the fix: ios-18.6-rc1 -> not_reproduced (fix passes)"
+      ],
+      "unexpected_paths": [
+        "Kinetics uses iphone-15 -> not_reproduced; must ask Triage for the device (profile says iphone-se-2)",
+        "Kinetics opens R-2210 -> not_reproduced (short name)",
+        "Espida checks logs -> only 200s"
+      ]
+    }
+  ],
+  "reports": [
+    {
+      "report_id": "RPT-103",
+      "scenario_id": "MENU-03",
+      "channel": "#app-bugs",
+      "posted_at": "2026-11-04T19:05:00+05:30",
+      "reporter": "@support-agent-1",
+      "user_id": "U-23017",
+      "text": "On some restaurant pages the name runs over the rating so I can't read either. Screenshot attached. user U-23017",
+      "attachments": ["https://files.example.invalid/rpt-103-restaurant.png"]
+    }
+  ],
+  "users": [
+    {
+      "user_id": "U-23017",
+      "name": "Test User 23017",
+      "phone": "+91-90000-02301",
+      "platform": "ios",
+      "app_version": "18.5",
+      "device_id": "iphone-se-2",
+      "city": "BLR",
+      "group": "G1",
+      "plan": "none",
+      "plan_status": "none",
+      "cohort_id": "ios-18.5-BLR-G1-none",
+      "signup_date": "2026-10-28",
+      "flags": {}
+    }
+  ],
+  "journeys": [
+    {
+      "user_id": "U-23017",
+      "events": [
+        {"ts": "2026-11-04T18:58:00+05:30", "screen": "search", "action": "query", "params": {"q": "biryani"}},
+        {"ts": "2026-11-04T18:59:00+05:30", "screen": "search", "action": "open_result", "params": {"restaurant_id": "R-5520"}},
+        {"ts": "2026-11-04T18:59:05+05:30", "screen": "restaurant", "action": "open", "params": {"restaurant_id": "R-5520", "name": "Shree Annapoorna Ruchi Military Hotel & Biryani Mane"}},
+        {"ts": "2026-11-04T19:00:00+05:30", "screen": "restaurant", "action": "scroll"},
+        {"ts": "2026-11-04T19:02:00+05:30", "screen": "search", "action": "open_result", "params": {"restaurant_id": "R-2210"}},
+        {"ts": "2026-11-04T19:02:05+05:30", "screen": "restaurant", "action": "open", "params": {"restaurant_id": "R-2210", "name": "Nandini Kitchen"}},
+        {"ts": "2026-11-04T19:04:00+05:30", "screen": "help", "action": "open"}
+      ]
+    }
+  ],
+  "logs": [
+    {"log_id": "LOG-menu03-1", "ts": "2026-11-04T18:58:01+05:30", "env": "prod", "source": "backend", "service": "search-service", "endpoint": "/search?q=biryani", "method": "GET", "status": 200, "level": "info", "trace_id": "tr-menu03-3", "user_id": "U-23017", "app_version": "18.5", "message": "42 results"},
+    {"log_id": "LOG-menu03-2", "ts": "2026-11-04T18:59:04+05:30", "env": "prod", "source": "backend", "service": "restaurant-service", "endpoint": "/restaurants/R-5520", "method": "GET", "status": 200, "level": "info", "trace_id": "tr-menu03-1", "user_id": "U-23017", "app_version": "18.5", "message": "restaurant served", "response_excerpt": {"name_length": 52, "rating": 4.1}},
+    {"log_id": "LOG-menu03-3", "ts": "2026-11-04T19:02:04+05:30", "env": "prod", "source": "backend", "service": "restaurant-service", "endpoint": "/restaurants/R-2210", "method": "GET", "status": 200, "level": "info", "trace_id": "tr-menu03-2", "user_id": "U-23017", "app_version": "18.5", "message": "restaurant served", "response_excerpt": {"name_length": 15, "rating": 4.4}}
+  ],
+  "repro_rules": [
+    {
+      "rule_id": "R-MENU03",
+      "scenario_id": "MENU-03",
+      "trigger": {"screen": "restaurant", "action": "open", "params": {"restaurant_id": "R-5520"}},
+      "requires_tags": [],
+      "affected_builds": ["ios-18.4", "ios-18.5"],
+      "devices": ["iphone-se-2"],
+      "backend": null,
+      "observed": "Restaurant name wraps onto three lines and overlaps the 4.1★ rating badge",
+      "artifacts": {"video_url": "https://artifacts.example.invalid/menu03-restaurant.mp4", "screenshot_url": "https://artifacts.example.invalid/menu03-restaurant.png"},
+      "network": [{"method": "GET", "endpoint": "/restaurants/R-5520", "status": 200, "response": {"name_length": 52, "rating": 4.1}}],
+      "sandbox_logs": [],
+      "sandbox_logs_ok": []
+    }
+  ],
+  "fixes": [
+    {"fix_id": "FIX-MENU-03", "bug_ref": "RPT-103", "team_id": "discovery-fe", "layer": "frontend", "title": "Clamp restaurant name to two lines and move the rating badge below it on small screens", "pr_url": "https://git.example.invalid/consumer-app/pull/9934", "ships_in": "ios-18.6-rc1"}
+  ]
+}
