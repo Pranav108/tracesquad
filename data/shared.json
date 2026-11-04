@@ -1,0 +1,60 @@
+{
+  "cohort_dimensions": {
+    "platforms": ["android", "ios"],
+    "app_versions": ["18.2", "18.3", "18.4", "18.5"],
+    "cities": {"DEL": "Delhi NCR", "BOM": "Mumbai", "BLR": "Bengaluru", "PNQ": "Pune", "HYD": "Hyderabad"},
+    "groups": {
+      "G1": "New", "G2": "Occasional", "G3": "Regular", "G4": "Frequent", "G5": "High spender",
+      "G6": "Lapsed", "G7": "Gold loyalist", "G8": "Corporate", "G9": "Student", "G10": "Late-night"
+    },
+    "plans": ["none", "gold_monthly", "gold_annual", "gold_trial"]
+  },
+  "sandbox_defaults": {
+    "membership-service": "3.12.0",
+    "payment-service": "9.0.3",
+    "cart-service": "4.8.2",
+    "checkout-service": "7.1.4",
+    "order-tracking-service": "5.3.0",
+    "restaurant-service": "2.19.0",
+    "promo-service": "1.7.0",
+    "search-service": "11.4.0"
+  },
+  "devices": [
+    {"device_id": "pixel-7", "model": "Pixel 7", "platform": "android", "os_version": "14", "screen": "regular"},
+    {"device_id": "galaxy-m32", "model": "Galaxy M32", "platform": "android", "os_version": "14", "screen": "regular"},
+    {"device_id": "oneplus-nord", "model": "OnePlus Nord", "platform": "android", "os_version": "13", "screen": "regular"},
+    {"device_id": "redmi-note-10", "model": "Redmi Note 10", "platform": "android", "os_version": "12", "screen": "regular"},
+    {"device_id": "iphone-15", "model": "iPhone 15", "platform": "ios", "os_version": "17.5", "screen": "regular"},
+    {"device_id": "iphone-se-2", "model": "iPhone SE (2nd gen)", "platform": "ios", "os_version": "17.5", "screen": "small"}
+  ],
+  "builds": [
+    {"build_id": "android-18.2", "platform": "android", "app_version": "18.2", "source": "github_actions", "branch": "release/18.2", "download_url": "https://builds.example.invalid/android-18.2.apk", "ready_in_minutes": 18},
+    {"build_id": "android-18.3", "platform": "android", "app_version": "18.3", "source": "github_actions", "branch": "release/18.3", "download_url": "https://builds.example.invalid/android-18.3.apk", "ready_in_minutes": 18},
+    {"build_id": "android-18.4", "platform": "android", "app_version": "18.4", "source": "play", "branch": "release/18.4", "download_url": "https://builds.example.invalid/android-18.4.apk", "ready_in_minutes": 0},
+    {"build_id": "android-18.5", "platform": "android", "app_version": "18.5", "source": "s3", "branch": "release/18.5", "download_url": "https://builds.example.invalid/android-18.5.apk", "ready_in_minutes": 0},
+    {"build_id": "android-18.6-rc1", "platform": "android", "app_version": "18.6-rc1", "source": "s3", "branch": "release/18.6", "download_url": "https://builds.example.invalid/android-18.6-rc1.apk", "ready_in_minutes": 0},
+    {"build_id": "ios-18.4", "platform": "ios", "app_version": "18.4", "source": "s3", "branch": "release/18.4", "download_url": "https://builds.example.invalid/ios-18.4.ipa", "ready_in_minutes": 0},
+    {"build_id": "ios-18.5", "platform": "ios", "app_version": "18.5", "source": "s3", "branch": "release/18.5", "download_url": "https://builds.example.invalid/ios-18.5.ipa", "ready_in_minutes": 0},
+    {"build_id": "ios-18.6-rc1", "platform": "ios", "app_version": "18.6-rc1", "source": "s3", "branch": "release/18.6", "download_url": "https://builds.example.invalid/ios-18.6-rc1.ipa", "ready_in_minutes": 0}
+  ],
+  "setup_apis": [
+    {"name": "create_user", "path": "/sandbox/users", "params": {"cohort_id": "cohort id, e.g. android-18.5-DEL-G7-gold_annual"}, "requires": [], "adds_tags": ["user", "cohort:{cohort_id}"]},
+    {"name": "set_address", "path": "/sandbox/users/{mock_user_id}/setup/set_address", "params": {"city": "city code: DEL, BOM, BLR, PNQ or HYD", "area": "locality name"}, "requires": ["user"], "adds_tags": ["address:{city}"]},
+    {"name": "set_group", "path": "/sandbox/users/{mock_user_id}/setup/set_group", "params": {"group": "user group G1-G10"}, "requires": ["user"], "adds_tags": ["group:{group}"]},
+    {"name": "activate_plan", "path": "/sandbox/users/{mock_user_id}/setup/activate_plan", "params": {"plan": "gold_monthly, gold_annual or gold_trial"}, "requires": ["address"], "adds_tags": ["plan:{plan}", "plan_status:active"]},
+    {"name": "renew_plan", "path": "/sandbox/users/{mock_user_id}/setup/renew_plan", "params": {"plan": "plan being renewed"}, "requires": ["plan"], "adds_tags": ["gold_renewed"]},
+    {"name": "add_payment_method", "path": "/sandbox/users/{mock_user_id}/setup/add_payment_method", "params": {"type": "upi or card"}, "requires": ["user"], "adds_tags": ["payment_method:{type}"]},
+    {"name": "fill_cart", "path": "/sandbox/users/{mock_user_id}/setup/fill_cart", "params": {"restaurant_id": "restaurant id, e.g. R-3391", "items": "list of {item_id, qty}"}, "requires": ["address"], "adds_tags": ["cart", "cart_restaurant:{restaurant_id}"]},
+    {"name": "apply_coupon", "path": "/sandbox/users/{mock_user_id}/setup/apply_coupon", "params": {"code": "coupon code"}, "requires": ["cart"], "adds_tags": ["coupon:{code}"]},
+    {"name": "place_order", "path": "/sandbox/users/{mock_user_id}/setup/place_order", "params": {"restaurant_id": "restaurant id", "items": "list of {item_id, qty}"}, "requires": ["address", "payment_method"], "adds_tags": ["order:active"]}
+  ],
+  "teams": [
+    {"team_id": "membership-be", "name": "Membership Backend", "kind": "backend", "owns": ["membership-service"], "channel": "#team-membership-be"},
+    {"team_id": "payments-be", "name": "Payments Backend", "kind": "backend", "owns": ["payment-service"], "channel": "#team-payments-be"},
+    {"team_id": "cart-be", "name": "Cart & Checkout Backend", "kind": "backend", "owns": ["cart-service", "checkout-service"], "channel": "#team-cart-be"},
+    {"team_id": "logistics-be", "name": "Logistics Backend", "kind": "backend", "owns": ["order-tracking-service"], "channel": "#team-logistics-be"},
+    {"team_id": "checkout-fe", "name": "Checkout App", "kind": "frontend", "owns": ["cart", "checkout", "payment"], "channel": "#team-checkout-fe"},
+    {"team_id": "discovery-fe", "name": "Discovery App", "kind": "frontend", "owns": ["home", "search", "restaurant"], "channel": "#team-discovery-fe"},
+    {"team_id": "orders-fe", "name": "Orders App", "kind": "frontend", "owns": ["order_tracking"], "channel": "#team-orders-fe"}
+  ]
+}
