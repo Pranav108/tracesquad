@@ -17,6 +17,23 @@ Interactive docs: http://localhost:8090/docs. OpenAPI JSON: http://localhost:809
 
 Tests: `uv run pytest`
 
+### Public URL for hosted agents (demo)
+
+```bash
+brew install cloudflared      # once
+scripts/tunnel.sh             # prints ">>> BUGMOCK_URL=https://<random>.trycloudflare.com"
+```
+
+This runs the API on this laptop (port 8095, or set `PORT=…`) and exposes it through a Cloudflare
+quick tunnel. You don't need an account. Set the printed URL as `BUGMOCK_URL` for the hosted agents.
+
+- **The URL is temporary.** It changes every time the script starts, and it stops working when the
+  script stops or the laptop sleeps.
+- **The script won't start on a busy port.** If something else already owns the port, it exits
+  instead of exposing that service.
+- **The API is open to anyone who has the URL**, including `/admin`, which is hidden from
+  `/openapi.json` but still reachable. That's fine for fake demo data. Don't share the URL widely.
+
 ## Endpoints
 
 | Used by | Method & path | Returns |
