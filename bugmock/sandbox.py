@@ -60,6 +60,7 @@ class Sandbox:
         self._user_seq = 0
         self._run_seq = 0
         self._attempt_seq = 0
+        self._check_seq = 0
 
     def create_user(self, cohort_id: str) -> MockUser:
         try:
@@ -142,6 +143,10 @@ class Sandbox:
     def next_attempt_no(self) -> int:
         self._attempt_seq += 1
         return self._attempt_seq
+
+    def next_check_id(self) -> str:
+        self._check_seq += 1
+        return f"CHK-{self._check_seq:04d}"
 
     def next_run_id(self) -> str:
         self._run_seq += 1

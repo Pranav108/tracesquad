@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from bugmock.atlas import FixRequest, submit_fix
+from bugmock.checks import CheckRequest, run_api_check
 from bugmock.errors import ApiError
 from bugmock.models import LogEntry
 from bugmock.repro import ReproRequest, run_repro
@@ -323,7 +324,7 @@ def _thread_view(request: Request, thread) -> dict[str, Any]:
     return thread.model_dump(mode="json")
 
 
-kinetics = APIRouter(tags=["Kinetics: devices and repro runs"])
+kinetics = APIRouter(tags=["Kinetics: devices, repro runs and API checks"])
 
 
 @kinetics.get("/devices", summary="Devices Kinetics can run builds on")
@@ -334,6 +335,11 @@ def list_devices(request: Request) -> list[dict[str, Any]]:
 @kinetics.post("/repro/runs", summary="Install a build on a device, log in as a mock user, follow the steps")
 def post_repro_run(body: ReproRequest, request: Request) -> dict[str, Any]:
     return run_repro(body, _store(request), _sandbox(request)).model_dump()
+
+
+@kinetics.post("/api-checks", summary="Call a backend endpoint on pre-prod as a mock user (to verify a backend fix)")
+def post_api_check(body: CheckRequest, request: Request) -> dict[str, Any]:
+    return run_api_check(body, _store(request), _sandbox(request))
 
 
 @admin.get("/scenarios", summary="All scenarios with expected class and path")
