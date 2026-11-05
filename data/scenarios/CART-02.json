@@ -106,5 +106,16 @@
   ],
   "fixes": [
     {"fix_id": "FIX-CART-02", "bug_ref": "RPT-102", "team_id": "checkout-fe", "layer": "frontend", "title": "Render discount rows when label is missing", "pr_url": "https://git.example.invalid/consumer-app/pull/9921", "ships_in": "android-18.6-rc1", "target": "checkout", "platforms": ["android", "ios"]}
+  ],
+  "changes": [
+    {"change_id": "CHG-411", "repo": "consumer-app", "area": "checkout", "platforms": ["android", "ios"], "title": "Checkout v3: new DiscountRow component", "summary": "Renders each discount as a row showing its label and amount.", "pr_url": "https://git.example.invalid/consumer-app/pull/8810", "team_id": "checkout-fe", "merged_at": "2026-10-14T16:00:00+05:30", "released_in": "18.2"},
+    {"change_id": "CHG-412", "repo": "checkout-service", "area": "checkout-service", "platforms": null, "title": "Coupons listed in discounts (label optional per contract v3)", "summary": "Coupon discounts are returned in the discounts list. label is optional for coupon rows.", "pr_url": "https://git.example.invalid/checkout-service/pull/1502", "team_id": "cart-be", "merged_at": "2026-09-15T12:00:00+05:30", "released_in": "checkout-service@7.0.0"},
+    {"change_id": "CHG-413", "repo": "restaurant-service", "area": "restaurant-service", "platforms": null, "title": "Menu image CDN switch", "summary": "Menu images are served from the new CDN.", "pr_url": "https://git.example.invalid/restaurant-service/pull/990", "team_id": "discovery-fe", "merged_at": "2026-11-04T09:30:00+05:30", "released_in": "restaurant-service@2.19.0"}
+  ],
+  "prds": [
+    {"prd_id": "PRD-CHECKOUT-V3", "title": "Checkout v3: discounts and coupons", "feature": "checkout-v3", "owner_team": "checkout-fe", "status": "live", "target_release": "18.2", "summary": "One checkout screen that shows every discount (Gold, coupons, offers) as its own row.", "sections": [{"heading": "Goals", "body": "Members see exactly which discounts apply and how much each one saves."}, {"heading": "Contract", "body": "GET /checkout/summary returns discounts[]. Each row has type and amount. label is required for gold and offer rows and optional for coupon rows; the app shows the coupon code when label is missing."}, {"heading": "Rollout", "body": "Live from 18.2 on android and ios."}], "known_issues": [], "changelog": [{"date": "2026-10-14", "change": "Checkout v3 launched in 18.2", "reason": "Checkout redesign", "bug_ref": null}]}
+  ],
+  "threads": [
+    {"thread_id": "THR-111", "channel": "#checkout-v3", "title": "QA: Gold discount + coupon combos crashing?", "started_at": "2026-10-22T11:00:00+05:30", "prd_id": "PRD-CHECKOUT-V3", "messages": [{"author": "@qa-lead", "ts": "2026-10-22T11:00:00+05:30", "text": "Saw one 'Something went wrong' on checkout with Gold plus a coupon on 18.2. Couldn't repro on the emulator."}, {"author": "@checkout-dev", "ts": "2026-10-22T11:40:00+05:30", "text": "Probably test data. Will look if it comes back."}, {"author": "@support-agent-2", "ts": "2026-11-04T13:50:00+05:30", "text": "It's back: a member hit it today right after applying a coupon."}]}
   ]
 }

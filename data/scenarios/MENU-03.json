@@ -87,5 +87,15 @@
   ],
   "fixes": [
     {"fix_id": "FIX-MENU-03", "bug_ref": "RPT-103", "team_id": "discovery-fe", "layer": "frontend", "title": "Clamp restaurant name to two lines and move the rating badge below it on small screens", "pr_url": "https://git.example.invalid/consumer-app/pull/9934", "ships_in": "ios-18.6-rc1", "target": "restaurant", "platforms": ["ios"]}
+  ],
+  "changes": [
+    {"change_id": "CHG-421", "repo": "consumer-app", "area": "restaurant", "platforms": ["ios"], "title": "Restaurant header: name and rating on one row", "summary": "Puts the restaurant name and rating badge on a single row to save vertical space.", "pr_url": "https://git.example.invalid/consumer-app/pull/8655", "team_id": "discovery-fe", "merged_at": "2026-09-20T15:00:00+05:30", "released_in": "18.4"},
+    {"change_id": "CHG-422", "repo": "consumer-app", "area": "search", "platforms": ["android", "ios"], "title": "Search result card spacing", "summary": "Tighter spacing between search result cards.", "pr_url": "https://git.example.invalid/consumer-app/pull/8902", "team_id": "discovery-fe", "merged_at": "2026-10-16T12:00:00+05:30", "released_in": "18.5"}
+  ],
+  "prds": [
+    {"prd_id": "PRD-RESTO-HEADER", "title": "Restaurant page header redesign", "feature": "restaurant-header", "owner_team": "discovery-fe", "status": "live", "target_release": "18.4", "summary": "A compact header so the menu starts higher on the screen.", "sections": [{"heading": "Layout", "body": "Name and rating badge sit on one row. Names longer than one line wrap without covering the badge."}, {"heading": "Devices", "body": "Designed and reviewed on 390pt-wide screens and larger."}, {"heading": "Rollout", "body": "Shipped on iOS in 18.4; android follows in 18.7."}], "known_issues": [], "changelog": [{"date": "2026-09-20", "change": "Header redesign shipped in 18.4 (iOS)", "reason": "Design refresh", "bug_ref": null}]}
+  ],
+  "threads": [
+    {"thread_id": "THR-121", "channel": "#design-reviews", "title": "Header with long names on small screens?", "started_at": "2026-09-12T15:00:00+05:30", "prd_id": "PRD-RESTO-HEADER", "messages": [{"author": "@designer-1", "ts": "2026-09-12T15:00:00+05:30", "text": "What happens to very long restaurant names on an SE-sized screen? The rating badge might collide."}, {"author": "@discovery-dev", "ts": "2026-09-12T15:30:00+05:30", "text": "We wrap the name, should be fine. Will check before release."}, {"author": "@designer-1", "ts": "2026-09-12T15:35:00+05:30", "text": "OK, flagging it as a follow-up."}]}
   ]
 }

@@ -114,3 +114,14 @@ def test_api_check_service_must_exist(tmp_path):
     d = write_dataset(tmp_path, base_shared(), {"A": {"api_checks": [check]}})
     with pytest.raises(DataError, match="ghost-service"):
         load_dataset(d)
+
+
+def test_atlas_gremlin_data():
+    s = Store(load_dataset(DATA_DIR))
+    assert s.changes["CHG-401"].released_in == "membership-service@3.12.0"
+    assert s.changes["CHG-411"].area == "checkout" and s.changes["CHG-421"].platforms == ["ios"]
+    assert s.api_checks[("GET", "/v2/membership/status")].check_def_id == "API-GOLD-01"
+    assert s.api_checks[("GET", "/orders/active/track")].buggy_when.app_versions == ["18.2", "18.3"]
+    assert {"PRD-GOLD-RENEW", "PRD-CHECKOUT-V3", "PRD-RESTO-HEADER", "PRD-TRACK-ETA"} <= set(s.prds)
+    assert any("label" in sec.body for sec in s.prds["PRD-CHECKOUT-V3"].sections)
+    assert {t.channel for t in s.threads.values()} >= {"#gold-support", "#checkout-v3", "#design-reviews", "#logistics-oncall", "#app-release"}

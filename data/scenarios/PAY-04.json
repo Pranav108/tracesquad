@@ -92,5 +92,8 @@
   ],
   "fixes": [
     {"fix_id": "FIX-PAY-04", "bug_ref": "BUG-1152", "team_id": "checkout-fe", "layer": "frontend", "title": "Handle UPI intent result on Android 14", "pr_url": "https://git.example.invalid/consumer-app/pull/9655", "ships_in": "android-18.4", "target": "payment", "platforms": ["android"], "published": true}
+  ],
+  "changes": [
+    {"change_id": "CHG-441", "repo": "consumer-app", "area": "payment", "platforms": ["android"], "title": "Handle UPI intent result on Android 14", "summary": "Reads the UPI intent result the way Android 14 returns it.", "pr_url": "https://git.example.invalid/consumer-app/pull/8401", "team_id": "checkout-fe", "merged_at": "2026-10-05T12:00:00+05:30", "released_in": "18.4"}
   ]
 }

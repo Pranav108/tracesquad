@@ -103,5 +103,20 @@
   ],
   "fixes": [
     {"fix_id": "FIX-TRACK-05", "bug_ref": "RPT-105", "team_id": "logistics-be", "layer": "backend", "title": "Serve tracking schema v1 to app versions below 18.4", "pr_url": "https://git.example.invalid/order-tracking-service/pull/731", "ships_in": "order-tracking-service@5.3.1", "target": "order-tracking-service"}
+  ],
+  "changes": [
+    {"change_id": "CHG-431", "repo": "order-tracking-service", "area": "order-tracking-service", "platforms": null, "title": "ETA returned as {min, max} (schema v2) for all clients", "summary": "Tracking returns an ETA range instead of minutes, to every client.", "pr_url": "https://git.example.invalid/order-tracking-service/pull/725", "team_id": "logistics-be", "merged_at": "2026-11-03T18:00:00+05:30", "released_in": "order-tracking-service@5.3.0"},
+    {"change_id": "CHG-432", "repo": "consumer-app", "area": "order_tracking", "platforms": ["android", "ios"], "title": "Tracking: support ETA ranges", "summary": "The tracking header can show an ETA range (schema v2).", "pr_url": "https://git.example.invalid/consumer-app/pull/8720", "team_id": "orders-fe", "merged_at": "2026-10-01T12:00:00+05:30", "released_in": "18.4"},
+    {"change_id": "CHG-433", "repo": "order-tracking-service", "area": "order-tracking-service", "platforms": null, "title": "Courier location polling every 10s", "summary": "Courier location refreshes every 10 seconds instead of 30.", "pr_url": "https://git.example.invalid/order-tracking-service/pull/701", "team_id": "logistics-be", "merged_at": "2026-10-10T12:00:00+05:30", "released_in": "order-tracking-service@5.2.0"}
+  ],
+  "api_checks": [
+    {"check_def_id": "API-TRACK-05", "scenario_id": "TRACK-05", "service": "order-tracking-service", "method": "GET", "endpoint": "/orders/active/track", "requires_tags": ["order:active"], "missing_response": {"status": 404, "body": {"error": "no active order"}}, "buggy_when": {"versions": ["5.3.0"], "app_versions": ["18.2", "18.3"]}, "buggy_response": {"status": 200, "body": {"schema_version": 2, "eta": {"min": 25, "max": 35}, "status": "preparing"}}, "ok_response": {"status": 200, "body": {"schema_version": 1, "eta": 30, "status": "preparing"}}}
+  ],
+  "prds": [
+    {"prd_id": "PRD-TRACK-ETA", "title": "Order tracking: ETA ranges", "feature": "tracking-eta", "owner_team": "orders-fe", "status": "in_progress", "target_release": "18.4", "summary": "Show an ETA range instead of a single number.", "sections": [{"heading": "API", "body": "order-tracking-service schema v2 returns eta as {min, max}. Apps before 18.4 only understand schema v1 (eta in minutes)."}, {"heading": "Rollout", "body": "App support shipped in 18.4. The backend switch to v2 is planned once 18.2-18.3 usage is below 5%."}], "known_issues": [], "changelog": [{"date": "2026-10-01", "change": "App support for ETA ranges shipped in 18.4", "reason": "ETA ranges", "bug_ref": null}]}
+  ],
+  "threads": [
+    {"thread_id": "THR-131", "channel": "#logistics-oncall", "title": "Tracking v2 rollout", "started_at": "2026-11-04T11:40:00+05:30", "prd_id": "PRD-TRACK-ETA", "messages": [{"author": "@logistics-dev", "ts": "2026-11-04T11:40:00+05:30", "text": "5.3.0 is out: ETA ranges for everyone."}, {"author": "@oncall-2", "ts": "2026-11-04T12:30:00+05:30", "text": "Seeing more 'blank tracking screen' tickets since lunch. Related?"}, {"author": "@logistics-dev", "ts": "2026-11-04T12:45:00+05:30", "text": "Shouldn't be, apps handle v2."}]},
+    {"thread_id": "THR-132", "channel": "#app-release", "title": "Force-update for 18.2/18.3?", "started_at": "2026-11-04T15:00:00+05:30", "prd_id": null, "messages": [{"author": "@release-manager", "ts": "2026-11-04T15:00:00+05:30", "text": "Any reason to force-update 18.2/18.3? Still about 20% of android users."}, {"author": "@orders-pm", "ts": "2026-11-04T15:20:00+05:30", "text": "Not yet, planned for next quarter."}]}
   ]
 }

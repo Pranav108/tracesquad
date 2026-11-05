@@ -101,5 +101,20 @@
   ],
   "fixes": [
     {"fix_id": "FIX-GOLD-01", "bug_ref": "RPT-101", "team_id": "membership-be", "layer": "backend", "title": "Invalidate status cache synchronously on membership.renewed", "pr_url": "https://git.example.invalid/membership-service/pull/4412", "ships_in": "membership-service@3.12.1", "target": "membership-service"}
+  ],
+  "changes": [
+    {"change_id": "CHG-401", "repo": "membership-service", "area": "membership-service", "platforms": null, "title": "Status cache TTL 5m -> 24h; invalidation via async job", "summary": "Caches membership status for 24h to cut DB reads. Cache invalidation moved to the nightly async job.", "pr_url": "https://git.example.invalid/membership-service/pull/4380", "team_id": "membership-be", "merged_at": "2026-11-02T13:10:00+05:30", "released_in": "membership-service@3.12.0"},
+    {"change_id": "CHG-402", "repo": "payment-service", "area": "payment-service", "platforms": null, "title": "Renewal receipt emails", "summary": "Sends an email receipt after a Gold renewal payment.", "pr_url": "https://git.example.invalid/payment-service/pull/2210", "team_id": "payments-be", "merged_at": "2026-11-01T11:00:00+05:30", "released_in": "payment-service@9.0.3"},
+    {"change_id": "CHG-403", "repo": "promo-service", "area": "promo-service", "platforms": null, "title": "City banners", "summary": "Home banners can be configured per city.", "pr_url": "https://git.example.invalid/promo-service/pull/318", "team_id": "cart-be", "merged_at": "2026-10-30T17:00:00+05:30", "released_in": "promo-service@1.7.0"}
+  ],
+  "api_checks": [
+    {"check_def_id": "API-GOLD-01", "scenario_id": "GOLD-01", "service": "membership-service", "method": "GET", "endpoint": "/v2/membership/status", "requires_tags": ["plan"], "missing_response": {"status": 200, "body": {"status": "none"}}, "buggy_when": {"versions": ["3.12.0"], "tags": ["gold_renewed"]}, "buggy_response": {"status": 200, "body": {"status": "expired", "cache_hit": true}}, "ok_response": {"status": 200, "body": {"status": "active", "cache_hit": false}}}
+  ],
+  "prds": [
+    {"prd_id": "PRD-GOLD-RENEW", "title": "Gold membership renewals", "feature": "gold-renewal", "owner_team": "membership-be", "status": "live", "target_release": "18.4", "summary": "Members can renew Gold from the app, and benefits continue without a gap.", "sections": [{"heading": "Goals", "body": "A renewal takes effect immediately: free delivery and member prices apply right after payment."}, {"heading": "Status API", "body": "Clients read GET /v2/membership/status on app start and on the cart. The response must reflect a renewal within one minute."}, {"heading": "Rollout", "body": "Live since 18.4 in all cities."}], "known_issues": [], "changelog": [{"date": "2026-09-02", "change": "Renewal flow launched", "reason": "Gold 2.0", "bug_ref": null}]}
+  ],
+  "threads": [
+    {"thread_id": "THR-101", "channel": "#gold-support", "title": "Members see 'Join Gold' right after renewing", "started_at": "2026-11-03T21:05:00+05:30", "prd_id": "PRD-GOLD-RENEW", "messages": [{"author": "@support-lead", "ts": "2026-11-03T21:05:00+05:30", "text": "Three tickets tonight: members renewed Gold, payment went through, app still shows Join Gold."}, {"author": "@support-agent-4", "ts": "2026-11-03T21:20:00+05:30", "text": "Two more. One says the delivery fee is charged on the next order."}, {"author": "@gold-pm", "ts": "2026-11-04T09:15:00+05:30", "text": "Looking. Is this only for renewals since yesterday?"}]},
+    {"thread_id": "THR-102", "channel": "#gold-launch", "title": "Annual pricing experiment", "started_at": "2026-10-25T10:00:00+05:30", "prd_id": "PRD-GOLD-RENEW", "messages": [{"author": "@gold-pm", "ts": "2026-10-25T10:00:00+05:30", "text": "Testing two annual price points in Pune and Delhi."}, {"author": "@growth-analyst", "ts": "2026-10-25T10:30:00+05:30", "text": "Week 1 results next Monday."}]}
   ]
 }
