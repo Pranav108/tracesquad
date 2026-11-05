@@ -57,12 +57,19 @@ quick tunnel. You don't need an account. Set the printed URL as `BUGMOCK_URL` fo
 | Telios, Kinetics | `GET /sandbox/users/{mock_user_id}` | Mock user: login, tags, calls made |
 | Kinetics | `GET /devices` | Devices to run on |
 | Kinetics | `POST /repro/runs` `{build_id, mock_user_id, device_id, steps}` | `reproduced` / `not_reproduced`, what was seen, artifacts, network calls |
+| Kinetics | `POST /api-checks` `{env: "preprod", mock_user_id, method, endpoint}` | A pre-prod backend response for that mock user (verifies backend fixes) |
 | Teams | `GET /teams` | Teams and what they own |
-| Teams | `GET /fixes?bug_ref=`, `GET /fixes/{fix_id}` | Published fixes: team, PR, where it ships |
-| Teams | `POST /fixes/{fix_id}/publish` | Announces a fix (call this when simulating "the team fixed it"; reset hides it again) |
-| Teams | `POST /sandbox/deploy` `{service, version}`, `GET /sandbox/services` | Sandbox service versions |
+| Atlas | `GET /changes?repo=&area=&since=` | Recently merged PRs (culprits and distractors) |
+| Atlas | `POST /atlas/fixes` `{bug_ref, layer, target, platform?, culprit_change_id, summary}` | A PR plus a new `-atlas-<n>` build (frontend) or pre-prod version (backend); never says if it's right |
+| Everyone | `GET /fixes?bug_ref=`, `GET /fixes/{fix_id}` | Atlas's attempts, and fixes that shipped earlier |
+| Gremlin | `GET /prds`, `GET /prds/{prd_id}`, `POST /prds/{prd_id}/updates` | PRDs; add a changelog entry or known issue |
+| Gremlin | `GET /releases`, `POST /releases/{release_id}/notes` | Release calendar; add a release note |
+| Gremlin | `GET /threads?q=`, `GET /threads/{thread_id}`, `POST /threads/{thread_id}/replies` | Threads in other channels; reply |
+| Gremlin | `POST /rca`, `GET /rca/{bug_ref}` | The final RCA per bug |
+| Operator | `POST /fixes/{fix_id}/publish`, `POST /sandbox/deploy` | Hidden from `/openapi.json`; only for manual demos |
+| Everyone | `GET /sandbox/services` | Service versions running in pre-prod (the sandbox), including Atlas's deploys |
 | Admin | `GET /admin/scenarios`, `GET /admin/scenarios/{scenario_id}` | Scenarios with expected answers (do not give these to agents) |
-| Admin | `POST /sandbox/reset` | Clears the sandbox and unpublishes fixes |
+| Admin | `POST /sandbox/reset` | Clears mock users, logs, Atlas's builds and deploys, API checks and Gremlin's writes |
 
 Admin routes and `/sandbox/reset` are left out of `/openapi.json`, so tools generated from it never
 reach the answers or wipe the sandbox.
@@ -85,8 +92,8 @@ Full detail, including expected and unexpected paths, is in
 
 ## Agent prompts
 
-System prompts for the four agents are in `prompts/`: `triage.md`, `telios.md`, `kinetics.md` and
-`espida.md`. Each one is self-contained. It covers the agent's role, the team directory (who owns
+System prompts for the six agents are in `prompts/`: `triage.md`, `telios.md`, `kinetics.md`,
+`espida.md`, `atlas.md` and `gremlin.md`. Each one is self-contained. It covers the agent's role, the team directory (who owns
 what), the Bugmock endpoints it should call, how it works, and the shared message protocol
 (`[ASK]`, `[ANSWER]`, `[NOT MINE]`, `[CLAIM]`, `[REPORT]`) the agents use in a bug's thread.
 

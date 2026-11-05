@@ -5,8 +5,9 @@ People report app bugs in a Slack channel. A small team of AI agents picks each 
 - who the affected user is
 - whether the bug is in the backend, the frontend, or both
 
-When the bug is new, the agents reproduce it with a mock copy of the user and hand clear evidence to the
-team that owns the fix. Once the fix exists, they check it.
+When the bug is new, the agents reproduce it with a mock copy of the user, **fix it** (PR plus a new
+app build or a pre-prod deploy), **verify** the fix, and **close the loop**: they update the PRD and
+release notes, tell the teams and related channels, and post a final RCA.
 
 This document explains:
 
@@ -32,17 +33,19 @@ of work emerges from those questions.
 
 | Agent | One-line job | Owns | Never does |
 |---|---|---|---|
-| **Triage** | Front door and owner of every bug | The bug and its Slack thread, the reporter, duplicate checks, the real user's profile and journey, the first classification | Reproduce, read logs in depth, fix |
+| **Triage** | Front door of every bug | The bug and its Slack thread, the reporter, duplicate checks, the real user's profile and journey, the first classification | Reproduce, read logs in depth, fix |
 | **Telios** | Prepares reproductions | Mock users and their data in a sandbox, login credentials, the right app build for a version | Reproduce or test anything, or touch real users |
-| **Kinetics** | Drives the app | Installing a build, logging in as a mock user, following steps, recording what happened, and re-checking frontend fixes | Create data (it asks Telios) or fix code |
+| **Kinetics** | Drives the app and checks fixes | Reproducing in the app; verifying frontend fixes in the app and backend fixes with an API call on pre-prod | Create data (it asks Telios) or fix code |
 | **Espida** | Reads the system's logs | Backend and client logs (prod and sandbox), traces, deploys, error impact | Change anything, or post personal data |
-| **FE / BE teams** | People who fix bugs | The code, publishing a fix, deploying backend fixes to the sandbox | — |
+| **Atlas** | Owns the fix | Finding the culprit change, opening the PR, shipping a new build (frontend) or a pre-prod deploy (backend) | Merge PRs, touch prod, or claim a fix works before it's verified |
+| **Gremlin** | Product and program manager | PRDs, the release calendar, related threads in other channels, informing teams, the final RCA | Investigate, fix or verify |
+| **FE / BE teams** | People | Reviewing and merging Atlas's PRs, and owning their features | — |
 
 A simple way to remember the split:
 - **Triage** knows *who the user is and what they did*.
 - **Espida** knows *what the system did*.
-- **Telios** builds *a copy of the user's situation*.
-- **Kinetics** *acts it out*.
+- **Telios** builds *a copy of the user's situation*, and **Kinetics** *acts it out*.
+- **Atlas** *changes the code*, and **Gremlin** *tells everyone what changed and why*.
 
 ---
 
@@ -51,41 +54,44 @@ A simple way to remember the split:
 ```mermaid
 flowchart LR
     reporter(["Reporter"]) -- "posts bug + user id" --> thread[["Bug thread in Slack"]]
-    teams(["FE / BE teams"]) <-- "reports, fixes" --> thread
+    teams(["FE / BE teams"]) <-- "PR reviews, updates" --> thread
 
     subgraph agents["Agents (any can ask any other, in the thread)"]
         triage["Triage"]
         telios["Telios"]
         kinetics["Kinetics"]
         espida["Espida"]
+        atlas["Atlas"]
+        gremlin["Gremlin"]
     end
 
-    thread <--> triage
-    thread <--> telios
-    thread <--> kinetics
-    thread <--> espida
+    thread <--> agents
 
-    subgraph api["Bugmock API (mock data + sandbox)"]
+    subgraph api["Bugmock API (mock data + pre-prod sandbox)"]
         real["Real-user data<br/>reports, profiles, journeys, known bugs"]
         obs["Observability<br/>logs, traces, deploys, impact"]
-        sandbox["Sandbox<br/>builds, setup APIs, mock users, repro runs"]
-        org["Org<br/>teams, fixes"]
+        sandbox["Pre-prod sandbox<br/>builds, mock users, repro runs, API checks"]
+        code["Code<br/>recent changes, fix attempts"]
+        product["Product<br/>PRDs, releases, threads, RCAs"]
     end
 
     triage --> real
-    triage --> org
     espida --> obs
-    espida --> real
     telios --> sandbox
-    telios --> real
     kinetics --> sandbox
-    kinetics --> org
+    atlas --> code
+    atlas --> sandbox
+    gremlin --> product
 ```
 
-The **bug thread** is the shared record. Every question, answer, claim and report is posted there,
-so any agent can read what's already known before asking. The **Bugmock API** is the agents' window
-onto the "world": the real user, the logs, and a sandbox where Telios and Kinetics can safely play
-the bug out.
+The **bug thread** is the shared record. Every question, answer, claim, report and the final RCA is
+posted there, so any agent can read what's already known before asking. The **Bugmock API** is the
+agents' window onto the "world": the real user, the logs, the code history, the product docs, and a
+pre-prod sandbox where fixes are tried and proven.
+
+The loop in one line: **Triage** checks and classifies → **Espida** / **Telios** + **Kinetics**
+confirm the bug → **Atlas** fixes it → **Kinetics** verifies → **Gremlin** updates the product side
+and posts the RCA.
 
 ---
 
@@ -98,24 +104,37 @@ fixes are published. The sandbox lives in memory and resets on restart.
 
 ### 3.1 What exists, and who reads it
 
-| Data | What it holds | Endpoint | Read by |
+| Data | What it holds | Endpoint | Used by |
 |---|---|---|---|
 | Reports | The Slack message: text, user id, time, attachments | `GET /reports/{report_id}` | Triage |
 | Known bugs | The bug database: status, affected platforms, versions and OS, `fixed_in`, thread link, error signature | `GET /known-bugs` | Triage |
 | User profiles | Platform, app version, device, city, area, group, plan, cohort | `GET /users/{user_id}` | Everyone |
-| Journeys | What the user did, in order (screen, action, params such as restaurant, items, coupon, order) | `GET /users/{user_id}/journey` | Everyone |
+| Journeys | What the user did, in order (screen, action, params) | `GET /users/{user_id}/journey` | Everyone |
 | Cohorts | The user's combination, `platform-version-city-group-plan`, with labels | `GET /cohorts/{cohort_id}` | Triage, Telios |
-| Logs | Backend and client log lines (prod, and sandbox runs), with trace ids, status, error signatures and response excerpts | `GET /logs` | Espida |
-| Traces | All log lines for one request, across services | `GET /traces/{trace_id}` | Espida |
-| Deploys | Prod deploys: service, version, time, what changed | `GET /deploys` | Espida |
-| Impact | How many users hit an error signature, by app version | `GET /impact/{error_signature}` | Espida |
-| Builds | Every app build: source (S3, Play, or GitHub Actions from a version branch), download URL, minutes to be ready | `GET /builds/{build_id}` | Telios, Kinetics |
+| Logs, traces | Backend and client log lines (prod, sandbox runs and API checks) | `GET /logs`, `GET /traces/{trace_id}` | Espida |
+| Deploys, impact | Prod deploys; users hit per error signature, by app version | `GET /deploys`, `GET /impact/{error_signature}` | Espida |
+| Builds | Every app build, plus Atlas's new `-atlas-<n>` builds | `GET /builds/{build_id}` | Telios, Kinetics, Atlas |
 | Devices | Phones to run on: model, OS version, screen size | `GET /devices` | Kinetics, Triage |
-| Setup APIs | The catalog Telios plans with: params, prerequisites (`requires`), tags added | `GET /setup-apis` | Telios |
-| Mock users | Users Telios creates in the sandbox: login, state tags, calls made | `POST /sandbox/users`, `GET /sandbox/users/{mock_user_id}` | Telios, Kinetics |
-| Repro runs | The result of Kinetics running a build on a device with a mock user | `POST /repro/runs` | Kinetics |
-| Teams | Who owns which service or screen, and their channel | `GET /teams` | Triage, Espida, Kinetics |
-| Fixes | PR, owning team, where it ships. Only visible once **published** | `GET /fixes` | Triage, Kinetics |
+| Setup APIs, mock users | How Telios builds a mock user, and the users it built | `GET /setup-apis`, `/sandbox/users…` | Telios, Kinetics |
+| Repro runs | Kinetics running a build on a device with a mock user | `POST /repro/runs` | Kinetics |
+| **API checks** | Kinetics calling a backend endpoint on pre-prod as a mock user | `POST /api-checks` | Kinetics |
+| **Recent changes** | Merged PRs per repo and area, with release version (the culprit hides among distractors) | `GET /changes` | Atlas, Gremlin |
+| **Fix attempts** | Atlas's fixes: PR, and a new build or a pre-prod version | `POST /atlas/fixes`, `GET /fixes` | Atlas (others read) |
+| **PRDs** | Feature docs: sections (including contracts), known issues, changelog | `GET /prds`, `POST /prds/{prd_id}/updates` | Gremlin |
+| **Releases** | App releases (18.5 released, 18.6 in QA, 18.7 planned) and the backend hotfix train | `GET /releases`, `POST /releases/{release_id}/notes` | Gremlin |
+| **Threads** | Conversations in other channels (support, QA, design, on-call, release) | `GET /threads?q=`, `POST /threads/{thread_id}/replies` | Gremlin |
+| **RCAs** | The final write-up per bug | `POST /rca`, `GET /rca/{bug_ref}` | Gremlin |
+| Teams | Who owns which service or screen, and their channel | `GET /teams` | Triage, Espida, Atlas, Gremlin |
+
+Atlas's and Gremlin's data per scenario:
+
+| Scenario | Culprit change (distractors exist for each) | PRD | Related threads |
+|---|---|---|---|
+| GOLD-01 | `CHG-401` membership-service: status cache TTL 24h, invalidation async | `PRD-GOLD-RENEW` | `#gold-support` (members see Join Gold) |
+| CART-02 | `CHG-411` app 18.2: new DiscountRow component | `PRD-CHECKOUT-V3` (contract: coupon `label` optional) | `#checkout-v3` (QA saw the crash in October) |
+| MENU-03 | `CHG-421` iOS 18.4: name and rating on one row | `PRD-RESTO-HEADER` (designed for 390pt+ screens) | `#design-reviews` (a designer flagged SE names before launch) |
+| TRACK-05 | `CHG-431` order-tracking-service: ETA as a range for all clients | `PRD-TRACK-ETA` (old apps only understand v1) | `#logistics-oncall`, `#app-release` |
+| PAY-04 | `CHG-441` (the old 18.4 fix) | — | — (a duplicate) |
 
 ### 3.2 The user's "combination" (cohort)
 
@@ -186,11 +205,11 @@ This is why the details matter. The wrong device, a skipped coupon, or an old bu
 
 ### 3.5 What's hidden from the agents
 
-- `/admin/*` holds each scenario's expected answer and its repro rules. It is left out of the API
-  docs (`/openapi.json`), and the prompts never mention it.
-- **Fixes** are invisible until a team publishes them (`POST /fixes/{fix_id}/publish`). Without
-  this, an agent could look the answer up before investigating. PAY-04's old fix is visible from the
-  start, because it shipped long ago.
+- `/admin/*` holds each scenario's expected answer and its repro rules.
+- **Whether an Atlas fix is right.** A right and a wrong fix get the same kind of response: a PR, plus a `-atlas-<n>` build or version. Only a repro run or an API check shows whether the bug is gone, so Atlas can't find the answer by trial and lookup.
+- **Operator-only routes:** `POST /sandbox/deploy`, `POST /fixes/{fix_id}/publish` and `POST /sandbox/reset`. These are for the person running the demo.
+
+All of the above are left out of `/openapi.json`, and no prompt mentions them.
 
 ---
 
@@ -198,7 +217,7 @@ This is why the details matter. The wrong device, a skipped coupon, or an old bu
 
 All conversation happens **in the bug's Slack thread**. Agents never call each other directly. They
 post a message addressed to another agent, and that agent replies in the thread. Every message uses
-one of five formats:
+one of six formats:
 
 | Message | Used for | Shape |
 |---|---|---|
@@ -206,12 +225,17 @@ one of five formats:
 | `[ANSWER]` | Replying with evidence | `answer:`, `evidence:` (which API call or record), `confidence:` high, medium or low |
 | `[NOT MINE]` | "That's not my area, ask X" | `try=<agent who owns it>` |
 | `[CLAIM]` | "I'm starting on this", so two agents don't duplicate work | `doing: …` |
-| `[REPORT]` | A result for a team or the thread | `summary:`, `evidence:`, `next:` |
+| `[REPORT]` | A result for another agent, a team or the thread (e.g. Kinetics → Atlas, Atlas → Gremlin) | `summary:`, `evidence:`, `next:` |
+| `[RCA]` | **Gremlin only.** The final write-up, which closes the bug | `what_happened:`, `root_cause:`, `fix:`, `verification:`, `impact:`, `follow_ups:` |
+
+**Ready for temporary channels.** Every header can carry `channel=<channel>`. In the future, a bug's
+discussion can move to a temporary channel. Gremlin then posts the `[RCA]` there **and** back in the
+original bug thread. Nothing creates or moves channels yet.
 
 Example exchange: Telios needs a coupon code that only the real user's journey contains.
 
 ```
-[ASK] bug=RPT-102 from=Telios to=Triage chain=Kinetics>Telios
+[ASK] bug=RPT-102 from=Telios to=Triage chain=Kinetics→Telios
 question: Which coupon did the user apply before the error?
 why: needed to set up the mock user's cart
 
@@ -227,19 +251,18 @@ confidence: high
 2. **Ask the owner.** Use the table in [section 1](#1-the-agents). Answer only from your own area.
 3. **Carry the chain.** When a question is passed on, add yourself to `chain`. Never ask an agent already in the chain, and stop after **3 hops** with "unknown".
 4. **Claim before working**, with `[CLAIM]`.
-5. **Budget:** about 15 questions per bug in total, and at most 3 repro runs. When the budget runs out, report what is known to the owning team.
-6. **Cite evidence:** every fact names the API call, log id, trace id or run id it came from.
+5. **Budget:** about 15 questions per bug in total, at most 3 repro runs, and at most **2 fix attempts** by Atlas before it escalates to the owning team.
+6. **Cite evidence:** every fact names the API call, log id, trace id, run id or check id it came from.
 
-**Triage owns each bug from start to finish.** It is the only agent that talks to the reporter, it
-posts status updates, it nudges whoever claimed a step if the bug goes quiet, and it closes the bug.
-It does **not** decide who asks whom.
+**Who closes a bug?** Gremlin's `[RCA]` closes every bug that was fixed. Triage closes duplicates
+itself. Triage stays the reporter's contact throughout.
 
 ---
 
 ## 5. Each agent's prompt
 
 The full, ready-to-paste system prompts are in `prompts/`. Those files are the exact text: paste one
-into the agent's system prompt and give the agent an HTTP tool. All four share the same structure:
+into the agent's system prompt and give the agent an HTTP tool. All six share the same structure:
 
 1. **Role**: what the agent owns, and what it must never do
 2. **Team directory**: who owns what, and what to ask each agent
@@ -247,17 +270,22 @@ into the agent's system prompt and give the agent an HTTP tool. All four share t
 4. **Playbook**: how the agent works through a bug (this is guidance, not a fixed script)
 5. **Shared protocol**: the message formats and rules from [section 4](#4-how-the-agents-talk)
 
-The prompt examples use made-up values (`U-12345`, `R-1000`, coupon `WELCOME20`), never real scenario
-ids, so the prompts can't leak answers. A test (`tests/test_prompts.py`) enforces this, along with three
-other checks: every endpoint a prompt names exists, no prompt mentions `/admin`, and every prompt names
-the other agents.
+Examples in the prompts use made-up values, never scenario ids, so the prompts can't leak answers.
+`tests/test_prompts.py` enforces this. It also checks that, in every prompt:
+- every endpoint named exists
+- no hidden route is mentioned
+- the other agents are named
+- the base URL is present
+- the protocol includes `channel=` and `[RCA]`
 
 | Agent | Prompt file | Endpoints it's given | The heart of its instructions |
 |---|---|---|---|
-| Triage | [`prompts/triage.md`](../prompts/triage.md) | reports, known bugs, users, journeys, cohorts, devices, fixes, teams | Check duplicates (with a version-aware rule), classify, route, answer questions about the real user, close the bug |
+| Triage | [`prompts/triage.md`](../prompts/triage.md) | reports, known bugs, users, journeys, cohorts, devices, fixes, teams | Check duplicates (with a version-aware rule), classify, route, answer questions about the real user, close duplicates |
 | Telios | [`prompts/telios.md`](../prompts/telios.md) | builds, setup APIs, sandbox users and setup calls, sandbox services, users, journeys, cohorts | Collect the target state, fetch the build first, plan setup calls by their prerequisites, stop just before the buggy step, hand over |
-| Kinetics | [`prompts/kinetics.md`](../prompts/kinetics.md) | devices, builds, sandbox users, repro runs, fixes, users, journeys | Match the real user's build, device and steps, run, change one thing at a time (max 3 runs), read network calls, report |
-| Espida | [`prompts/espida.md`](../prompts/espida.md) | logs, traces, deploys, impact, teams, sandbox services, users, journeys | Choose the time window from the journey, follow traces, check deploys and impact, apply the layer rules, report with ids |
+| Kinetics | [`prompts/kinetics.md`](../prompts/kinetics.md) | devices, builds, sandbox users, repro runs, **API checks**, fixes, users, journeys | Reproduce like the real user and report to Atlas; verify frontend fixes in the app and backend fixes with `POST /api-checks`; answer Atlas |
+| Espida | [`prompts/espida.md`](../prompts/espida.md) | logs, traces, deploys, impact, teams, sandbox services, users, journeys | Choose the time window from the journey, follow traces, check deploys and impact, apply the layer rules, report to Atlas, and confirm backend fixes from the sandbox logs |
+| **Atlas** | [`prompts/atlas.md`](../prompts/atlas.md) | changes, atlas fixes, fixes, sandbox services, builds, traces, reports, users, teams | Find the culprit among recent changes, decide the layer (asking Gremlin for the intended behaviour), submit the fix, hand it to Kinetics, retry at most once, hand the verified fix to Gremlin |
+| **Gremlin** | [`prompts/gremlin.md`](../prompts/gremlin.md) | PRDs (+updates), releases (+notes), threads (+replies), RCA, teams, fixes, changes, impact | Answer product questions during a bug; after verification, update the PRD and release, reply in related threads, inform the teams, write and post the `[RCA]` |
 
 ---
 
@@ -322,20 +350,40 @@ the error.
 - Read the run's network calls. If a call looks wrong, ask Espida.
 - "Not reproduced, here is everything I tried" is a valid, useful result.
 
-### 6.5 When is a bug done?
+### 6.5 Atlas: which change, which layer?
 
-| Fix type | How it's checked | It passes when |
+1. **Read the evidence:** Kinetics's repro (observed, network calls) and Espida's findings (failing call, deploy, impact).
+2. **Find the culprit** with `GET /changes` for the suspect app screen *and* the service behind it, from shortly before the first error. Each scenario hides the real culprit among plausible distractors (same area, wrong cause).
+3. **Decide the layer** against the intended behaviour, which Gremlin quotes from the PRD:
+   - **Backend:** the service broke its contract, returns wrong or stale data, or changed a response that already released app versions depend on (old apps can't be patched).
+   - **Frontend:** the service behaves as the contract says, and the app mishandles it, or the layout is wrong.
+4. **Submit** with `POST /atlas/fixes`, then hand it to Kinetics. Atlas doesn't learn whether it's right until Kinetics verifies. After two failed attempts, it escalates to the owning team.
+
+### 6.6 Kinetics: is the fix real?
+
+| Fix type | How Kinetics checks it | It passes when |
 |---|---|---|
-| Frontend | The team publishes the fix. Kinetics re-runs the **same steps** with the **same mock user** on the fixed build (`ships_in`) | `not_reproduced` |
-| Backend | The team deploys the fix to the sandbox. Telios sets up the mock user, Kinetics re-runs on the user's **original** build, and Espida reads the sandbox logs | `not_reproduced`, and the call that used to fail now returns correct data |
+| Frontend | Runs the **same steps** with the **same mock user** and device on Atlas's build (`<platform>-<version>-atlas-<n>`) | `not_reproduced` |
+| Backend | Calls the endpoint that used to fail with `POST /api-checks` as the mock user, then runs the app once on the user's **original** build. Espida confirms from the sandbox logs | The API response is correct (e.g. `status: active`, `schema_version: 1`), and the app run is `not_reproduced` |
 
-Triage then tells the reporter what was fixed and where it ships, and closes the bug.
+A wrong fix looks exactly like a right one until this step: the bug still reproduces, or the API
+still returns the buggy response.
+
+### 6.7 Gremlin: closing the loop
+
+Once Atlas hands over a **verified** fix, Gremlin:
+
+1. **Updates the PRD** with a changelog entry, plus a known issue if users must update the app or old versions stay affected.
+2. **Notes the release:** the next open app release (18.6, in QA until 10 Nov) for frontend fixes, or the backend hotfix train.
+3. **Searches other channels** (`GET /threads?q=` with the symptom words) and replies in the threads that are really about this issue, such as support, QA, design review or on-call.
+4. **Informs the owning team(s)**: the app team for UI or app fixes, and both sides for contract issues.
+5. **Writes the RCA** with `POST /rca` and posts the `[RCA]` message, which closes the bug: what users saw, why, what changed, how it was proven, the impact and follow-ups.
 
 ---
 
 ## 7. The flows, step by step
 
-### 7.1 CART-02: looks unclear, turns out frontend (the most cross-talk)
+### 7.1 CART-02: a frontend fix, end to end
 
 ```mermaid
 sequenceDiagram
@@ -345,28 +393,31 @@ sequenceDiagram
     participant E as Espida
     participant TE as Telios
     participant K as Kinetics
-    actor FE as checkout-fe team
+    participant A as Atlas
+    participant G as Gremlin
     R->>T: Checkout shows 'Something went wrong' after I apply a coupon. user U-77105
-    Note over T: Report, profile, journey, cohort, known bugs<br/>BUG-1207 looks similar but is a different issue<br/>Class: unclear
-    T->>E: [ASK] What happened in the backend for U-77105 around 13:34?
-    Note over E: Logs (backend and client), traces, impact
-    E-->>T: [ANSWER] All backend calls 200 with valid data.<br/>Client crash app.checkout.discount_row_crash on 18.2. Frontend.
+    Note over T: Not a duplicate. Class: unclear
+    T->>E: [ASK] What happened in the backend around 13:34?
+    E-->>T: [ANSWER] Backend all 200s. Client crash on 18.2. Frontend.
     T->>K: [ASK] Reproduce RPT-102
-    K->>TE: [ASK] Build and mock user for RPT-102
-    Note over TE: Build android-18.2 (GitHub Actions, 18 min)<br/>create_user, set_address PNQ, set_group G3,<br/>activate_plan gold_monthly, fill_cart R-3391
-    TE->>T: [ASK] chain=Kinetics→Telios. Which coupon did the user apply?
-    T-->>TE: [ANSWER] SAVE50 (journey 13:34 cart/apply_coupon)
-    Note over TE: apply_coupon SAVE50
-    TE-->>K: [ANSWER] Setup ready: MU-0001 on android-18.2.<br/>Start at cart/open, then checkout/open
-    Note over K: Repro run on redmi-note-10 (the user's phone)
-    K->>FE: [REPORT] Reproduced: error dialog, video, network calls
-    FE-->>K: Fix published, ships in android-18.6-rc1
-    Note over K: Same steps, same mock user, on android-18.6-rc1
-    K-->>T: [ANSWER] not_reproduced on 18.6-rc1. Fix passes
-    T->>R: Fixed in 18.6. Thanks for reporting
+    K->>TE: [ASK] Build and mock user
+    TE->>T: [ASK] chain=Kinetics→Telios. Which coupon?
+    T-->>TE: [ANSWER] SAVE50 (journey 13:34)
+    TE-->>K: [ANSWER] MU-0001 on android-18.2. Start at cart/open
+    Note over K: Repro run on redmi-note-10: reproduced
+    K->>A: [REPORT] Reproduced. Run, video, network calls
+    A->>G: [ASK] What does the checkout contract say about discount labels?
+    G-->>A: [ANSWER] PRD-CHECKOUT-V3: label is optional for coupon rows
+    Note over A: Culprit CHG-411 (app 18.2 DiscountRow), not CHG-412<br/>POST /atlas/fixes: frontend, checkout, android
+    A->>K: [REPORT] Verify build android-18.2-atlas-1, same user and steps
+    Note over K: Repro run on the Atlas build: not_reproduced
+    K-->>A: [ANSWER] Verified (run id)
+    A->>G: [REPORT] Verified fix: PR, build, run, culprit, root cause
+    Note over G: PRD changelog + known issue, app-18.6 note<br/>Reply in #checkout-v3, inform checkout-fe<br/>POST /rca
+    G->>R: [RCA] Crash with Gold + coupon: cause, fix in 18.6, proof, impact, follow-ups
 ```
 
-### 7.2 GOLD-01: backend bug, checked in the sandbox
+### 7.2 GOLD-01: a backend fix, verified with an API call
 
 ```mermaid
 sequenceDiagram
@@ -374,24 +425,26 @@ sequenceDiagram
     actor R as Reporter
     participant T as Triage
     participant E as Espida
-    actor BE as membership-be team
     participant TE as Telios
     participant K as Kinetics
+    participant A as Atlas
+    participant G as Gremlin
     R->>T: Renewed Gold, money deducted, app still says Join Gold. user U-48213
-    Note over T: No duplicate (BUG-1180 is an iOS badge bug)<br/>Class: backend
-    T->>E: [ASK] What happened in the backend around the renewal and at 09:58?
-    Note over E: renewal.success at 20:14, then status expired served from cache<br/>DEP-201 membership-service 3.12.0 (cache TTL 24h)<br/>Impact: 1284 users on 18.4 and 18.5
-    E->>BE: [REPORT] Backend: stale membership status after renewal. Trace, deploy, impact
-    E-->>T: [ANSWER] Backend fault, reported to membership-be
-    Note over BE: Fix: clear the cache on renewal.<br/>Deploy 3.12.1 to the sandbox, publish the fix
-    BE->>TE: Re-test RPT-101 on the updated sandbox
-    Note over TE: create_user, set_address DEL, set_group G7,<br/>activate_plan gold_annual, renew_plan
-    TE-->>K: [ANSWER] Setup ready: MU-0001 on android-18.5. Start at home/open
-    Note over K: Repro run on pixel-7: not_reproduced
-    K->>E: [ASK] Check the sandbox logs for MU-0001
-    Note over E: Sandbox logs: membership status is active
-    E-->>T: [ANSWER] Fix confirmed in the sandbox
-    T->>R: Fixed. Gold status now updates right after renewal
+    Note over T: Not a duplicate. Class: backend
+    T->>E: [ASK] What happened in the backend around the renewal?
+    Note over E: Status served from cache after renewal<br/>DEP-201 membership-service 3.12.0. Impact 1284 users
+    E->>A: [REPORT] Backend: stale membership status. Trace, deploy, impact
+    Note over A: Culprit CHG-401 (cache TTL 24h)<br/>POST /atlas/fixes: backend, membership-service<br/>Pre-prod now runs 3.12.0-atlas-1
+    A->>TE: [ASK] Mock user for RPT-101: renewed Gold, Delhi
+    TE-->>A: [ANSWER] MU-0001 ready
+    A->>K: [REPORT] Verify GET /v2/membership/status as MU-0001 (was expired)
+    Note over K: API check: status active<br/>App run on android-18.5: not_reproduced
+    K-->>A: [ANSWER] Verified (check id, run id)
+    A->>E: [ASK] Confirm in the sandbox logs for MU-0001
+    E-->>A: [ANSWER] The status call now returns active
+    A->>G: [REPORT] Verified fix: PR, pre-prod version, check, culprit, root cause
+    Note over G: PRD-GOLD-RENEW update, hotfix-2026-11-06 note<br/>Reply in #gold-support, inform membership-be<br/>POST /rca
+    G->>R: [RCA] Stale Gold status after renewal: cause, fix, proof, 1284 users, follow-ups
 ```
 
 ### 7.3 PAY-04: a duplicate, settled by Triage alone
@@ -413,46 +466,46 @@ If an agent investigates anyway, the data agrees with that answer:
 
 ### 7.4 MENU-03 and TRACK-05 in brief
 
-**MENU-03 (ui).** Triage classifies it as ui and asks for a reproduction. Telios fetches `ios-18.5`
-and sets up a new Bengaluru user. Kinetics opens the long-named restaurant:
-- On an iPhone 15 it does **not** reproduce. Kinetics asks Triage for the user's device, which is an iPhone SE.
-- On the SE it reproduces.
+**MENU-03 (ui).**
+- Telios fetches `ios-18.5`. Kinetics reproduces only on the iPhone SE (it asks Triage for the device).
+- Atlas finds `CHG-421`, the iOS 18.4 header change, and ships `ios-18.5-atlas-<n>` targeting the `restaurant` screen. Kinetics re-runs on the SE: fixed.
+- Gremlin updates `PRD-RESTO-HEADER` (designed for 390pt+ screens), notes the fix on `app-18.6`, replies in `#design-reviews` (where a designer had raised exactly this), and posts the RCA.
 
-Espida, if asked, finds only 200s. After the fix, the iOS 18.6 release candidate no longer reproduces.
-
-**TRACK-05 (both).** Espida finds:
-- the tracking call returning 200 with the new ETA format (schema v2)
-- a client `TypeError` on 18.3
-- deploy DEP-205 that morning
-- impact only on app versions 18.2–18.3
-
-Its verdict: the backend broke the contract for old apps. The backend team serves the old format to
-apps below 18.4 (5.3.1), and the frontend team is informed. Kinetics's clue before the fix: the same
-steps on 18.4 don't reproduce, because newer apps cope. After 5.3.1 is in the sandbox, 18.3 no
-longer reproduces, and Espida sees `schema_version: 1` in the sandbox logs.
+**TRACK-05 (both).**
+- Espida finds:
+  - the tracking call returning schema v2
+  - a client `TypeError` on 18.3
+  - deploy DEP-205
+  - impact only on 18.2–18.3
+- Atlas finds `CHG-431`. Since old apps can't be patched, the fix is **backend**: order-tracking-service serves v1 to apps below 18.4. A first attempt at an app fix would still reproduce on the reporter's 18.3 build, so verification catches it.
+- Kinetics's API check on `GET /orders/active/track` now returns `schema_version: 1`.
+- Gremlin updates `PRD-TRACK-ETA`, notes the hotfix train, replies in `#logistics-oncall` and `#app-release` (the force-update discussion), informs logistics-be and orders-fe, and posts the RCA.
 
 ---
 
 ## 8. Running the demo
 
 1. **Start the API with a public URL:** `scripts/tunnel.sh`. It prints `BUGMOCK_URL=https://….trycloudflare.com`
-   and rewrites that URL into `prompts/*.md`. The URL changes on every restart.
+   and rewrites that URL into all six `prompts/*.md`. The URL changes on every restart.
 2. **Create the agents.** Paste each `prompts/<agent>.md` as the system prompt, give the agent an HTTP
    tool (or generate tools from `/openapi.json`), and connect the agent to the bug channel.
 3. **Play the reporter.** Post a report's text in the channel, e.g. the text of `GET /reports/RPT-102`.
-4. **Play the teams** when the agents report to you:
-   - Frontend fix: `POST /fixes/<fix_id>/publish`, then tell Kinetics which build to check (`ships_in`).
-   - Backend fix: `POST /sandbox/deploy` with `{"service": "...", "version": "..."}`, then `POST /fixes/<fix_id>/publish`.
-5. **Check the agents' work** against `GET /admin/scenarios/<id>`, which has the expected class and path.
-6. **Reset between runs:** `POST /sandbox/reset`. It clears mock users, sandbox logs, deploys and published fixes.
+4. **Let the agents run.** They reproduce the bug, fix it, verify the fix and close it with an `[RCA]`.
+   The operator no longer deploys or publishes fixes for new bugs.
+5. **Check their work:**
+   - `GET /admin/scenarios/<id>` has the expected class and path.
+   - `GET /rca/<report_id>`, `GET /prds/<id>` and `GET /threads/<id>` show what Gremlin wrote.
+   - `GET /fixes?bug_ref=<report_id>` shows Atlas's attempts.
+6. **Reset between runs:** `POST /sandbox/reset` clears mock users, logs, Atlas's builds and deploys, API checks, and Gremlin's writes.
 
-| Scenario | Report | Fix id | How the team "fixes" it |
-|---|---|---|---|
-| GOLD-01 | RPT-101 | FIX-GOLD-01 | deploy `membership-service` `3.12.1`, then publish |
-| CART-02 | RPT-102 | FIX-CART-02 | publish (ships in `android-18.6-rc1`) |
-| MENU-03 | RPT-103 | FIX-MENU-03 | publish (ships in `ios-18.6-rc1`) |
-| PAY-04 | RPT-104 | FIX-PAY-04 | already published (shipped in 18.4) |
-| TRACK-05 | RPT-105 | FIX-TRACK-05 | deploy `order-tracking-service` `5.3.1`, then publish |
+| Scenario | Report | Right fix (layer, target) | Culprit | Verified by |
+|---|---|---|---|---|
+| GOLD-01 | RPT-101 | backend, `membership-service` | CHG-401 | API check `GET /v2/membership/status` → `active`, and the app run |
+| CART-02 | RPT-102 | frontend, `checkout` (android or ios) | CHG-411 | App run on the `-atlas-` build |
+| MENU-03 | RPT-103 | frontend, `restaurant` (ios) | CHG-421 | App run on the `-atlas-` build on the iPhone SE |
+| PAY-04 | RPT-104 | — (duplicate, closed by Triage) | — | — |
+| TRACK-05 | RPT-105 | backend, `order-tracking-service` | CHG-431 | API check `GET /orders/active/track` → `schema_version: 1`, and the app run on 18.3 |
 
 Limits to keep in mind: the API is open to anyone with the URL, the sandbox is in memory and resets on
 restart, and the URL stops working when the laptop sleeps.
+
