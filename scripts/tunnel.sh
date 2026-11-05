@@ -27,5 +27,8 @@ cloudflared tunnel --no-autoupdate --url "http://127.0.0.1:$PORT" 2>&1 | while I
   url=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' <<<"$line" || true)
   if [ -n "$url" ]; then
     echo ">>> BUGMOCK_URL=$url"
+    # Keep the agent prompts pointing at the live URL (BSD sed, macOS).
+    sed -i '' -E "s#https://[a-z0-9-]+\.trycloudflare\.com#$url#g" prompts/*.md
+    echo ">>> prompts/*.md now use $url"
   fi
 done

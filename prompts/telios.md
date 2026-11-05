@@ -22,17 +22,74 @@ There is no fixed flow. Any agent can ask any other agent, and each one answers 
 
 ## Tools: the Bugmock API
 
-Base URL: `$BUGMOCK_URL` (default `http://localhost:8090`). Errors look like `{"detail": "..."}`.
+**Base URL:** `https://<tunnel>.trycloudflare.com`
 
-- `GET /builds`, `GET /builds/{build_id}`: build ids look like `android-18.2` or `ios-18.6-rc1`. `source` is `s3`, `play` or `github_actions`; `ready_in_minutes` > 0 means the build is made from the version's branch and takes that long. Fetch the build **first**.
-- `GET /setup-apis`: the catalog. Each entry has `params`, `requires` (tags that must already exist) and `adds_tags` (tags it adds).
-- `POST /sandbox/users` with `{"cohort_id": "..."}`: creates a mock user and returns `mock_user_id`, `login` (phone + OTP), `platform`, `app_version` and `tags`.
-- `POST /sandbox/users/{mock_user_id}/setup/{api_name}` with the API's params as the JSON body: returns the mock user with its new tags.
-  - 409 means a prerequisite is missing; the detail names the API to call first.
-  - 422 means a param is missing.
-- `GET /sandbox/users/{mock_user_id}`: the mock user's tags (its current state) and every call made so far.
-- `GET /sandbox/services`: the service versions currently running in the sandbox.
-- `GET /users/{user_id}`, `GET /users/{user_id}/journey`, `GET /cohorts/{cohort_id}`: read the real user's facts yourself before asking Triage.
+Every call below goes to this base URL. For example, `GET /builds/{build_id}` means
+`curl https://<tunnel>.trycloudflare.com/builds/ios-18.4`.
+
+- Send POST bodies as JSON, with the header `Content-Type: application/json`.
+- Errors look like `{"detail": "<message>"}`:
+  - 404: an unknown id
+  - 409: a setup prerequisite is missing; the message names the API to call first
+  - 422: a param is missing or not an allowed value
+- If the base URL stops answering, the demo was restarted. Ask the operator for the new URL.
+
+#### GET /builds
+No params.
+- Returns every build that can be fetched: `build_id`, `platform`, `app_version`, `source` (`s3`, `play` or `github_actions`), `branch`, `download_url`, `ready_in_minutes`.
+
+#### GET /builds/{build_id}
+- Path: `build_id` is `<platform>-<app_version>`, taken from the real user's profile, e.g. `ios-18.4` or `android-18.5`. Release candidates look like `android-18.6-rc1`.
+- Returns one build. If `ready_in_minutes` is greater than 0, the build is made from its version branch through GitHub Actions and takes that long. Say so in your handover.
+
+#### GET /setup-apis
+No params.
+- Returns the setup catalog: `name`, `path`, `params`, `requires`, `adds_tags`. The table further down summarises it.
+
+#### POST /sandbox/users
+Creates a mock user. This is always your first setup call.
+- Body: `{"cohort_id": "<the real user's cohort_id>"}`, e.g. `{"cohort_id": "ios-18.4-BOM-G5-gold_monthly"}`.
+- Returns: `mock_user_id` (e.g. `MU-0001`), `login` (`phone` and `otp`), `platform`, `app_version`, `tags` and `calls`.
+
+#### POST /sandbox/users/{mock_user_id}/setup/{api_name}
+Runs one setup API on a mock user.
+- Path: `mock_user_id`, from the call above, and `api_name`, one of the names in the table below.
+- Body: that API's params as a JSON object.
+- Returns: the mock user with its updated `tags`.
+- Example: `curl -X POST https://<tunnel>.trycloudflare.com/sandbox/users/MU-0001/setup/set_group -H 'Content-Type: application/json' -d '{"group": "G5"}'`
+
+| api_name | Body | Must already have tag | Adds tags |
+|---|---|---|---|
+| `set_address` | `{"city": "<city code>", "area": "<area>"}`. City is one of `DEL`, `BOM`, `BLR`, `PNQ`, `HYD`; take city and area from the profile | `user` | `address:<city>` |
+| `set_group` | `{"group": "<group>"}`. Group is one of `G1` … `G10`, from the profile | `user` | `group:<group>` |
+| `activate_plan` | `{"plan": "<plan>"}`. Plan is one of `gold_monthly`, `gold_annual`, `gold_trial` | `address` | `plan:<plan>`, `plan_status:active` |
+| `renew_plan` | `{"plan": "<the plan being renewed>"}` | `plan` | `gold_renewed` |
+| `add_payment_method` | `{"type": "upi"}` or `{"type": "card"}` | `user` | `payment_method:<type>` |
+| `fill_cart` | `{"restaurant_id": "R-1000", "items": [{"item_id": "I-10", "qty": 1}]}`, with ids from the journey | `address` | `cart`, `cart_restaurant:<restaurant_id>` |
+| `apply_coupon` | `{"code": "WELCOME20"}`, with the code from the journey | `cart` | `coupon:<code>` |
+| `place_order` | `{"restaurant_id": "R-1000", "items": [{"item_id": "I-10", "qty": 1}]}`, with ids from the journey | `address`, `payment_method` | `order:active` |
+
+`create_user` in the catalog is `POST /sandbox/users` above. Don't call it through the setup route.
+
+#### GET /sandbox/users/{mock_user_id}
+- Path: `mock_user_id`, e.g. `MU-0001`.
+- Returns its `login`, its `tags` (the current state) and the `calls` made so far.
+
+#### GET /sandbox/services
+No params.
+- Returns the service versions running in the sandbox, e.g. `{"membership-service": "3.12.0", ...}`.
+
+#### GET /users/{user_id}
+- Path: `user_id`, e.g. `U-12345`.
+- Returns the real user's profile: `platform`, `app_version`, `device_id`, `city`, `area`, `group`, `plan`, `plan_status`, `cohort_id`.
+
+#### GET /users/{user_id}/journey
+- Path: `user_id`.
+- Returns `events`, oldest first. Each has `ts`, `screen`, `action` and `params` (`restaurant_id`, `items`, `code`, `order_id`, …).
+
+#### GET /cohorts/{cohort_id}
+- Path: `cohort_id`, e.g. `ios-18.4-BOM-G5-gold_monthly`.
+- Returns its labelled parts.
 
 ## How to set up a bug
 

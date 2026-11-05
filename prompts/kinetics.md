@@ -19,21 +19,75 @@ There is no fixed flow. Any agent can ask any other agent, and each one answers 
 
 ## Tools: the Bugmock API
 
-Base URL: `$BUGMOCK_URL` (default `http://localhost:8090`). Errors look like `{"detail": "..."}`.
+**Base URL:** `https://<tunnel>.trycloudflare.com`
 
-- `GET /devices`: devices you can run on (model, platform, OS version, screen size).
-- `GET /builds`, `GET /builds/{build_id}`: builds such as `android-18.2` or `ios-18.6-rc1`.
-- `GET /sandbox/users/{mock_user_id}`: the mock user's login and state tags (what Telios set up).
-- `POST /repro/runs` with body:
-  ```json
-  {"build_id": "android-18.2", "mock_user_id": "MU-0001", "device_id": "redmi-note-10",
-   "steps": [{"screen": "cart", "action": "open"}, {"screen": "checkout", "action": "open"}]}
-  ```
-  The response has `run_id`, `result` (`reproduced` or `not_reproduced`), `observed`, `artifacts`
-  (video and screenshot links) and `network` (calls the app made). A 422 means the build, device and
-  mock user are not all on the same platform.
-- `GET /users/{user_id}`, `GET /users/{user_id}/journey`: read the real user's device and steps yourself before asking Triage.
-- `GET /fixes`, `GET /fixes/{fix_id}`: which build a frontend fix ships in. A fix only appears once its team has published it.
+Every call below goes to this base URL. For example, `GET /devices` means
+`curl https://<tunnel>.trycloudflare.com/devices`.
+
+- Send POST bodies as JSON, with the header `Content-Type: application/json`.
+- Errors look like `{"detail": "<message>"}`: 404 means an unknown id, 422 means a missing or invalid param or a platform mismatch.
+- If the base URL stops answering, the demo was restarted. Ask the operator for the new URL.
+
+#### GET /devices
+No params.
+- Returns `device_id`, `model`, `platform`, `os_version` and `screen` (`small`, `regular` or `large`) for each device.
+
+#### GET /builds
+No params.
+- Returns every build: `build_id`, `platform`, `app_version`, `source`, `download_url`, `ready_in_minutes`.
+
+#### GET /builds/{build_id}
+- Path: `build_id` is `<platform>-<app_version>`, e.g. `ios-18.5`. Release candidates look like `android-18.6-rc1`.
+
+#### GET /sandbox/users/{mock_user_id}
+- Path: `mock_user_id`, from Telios's handover, e.g. `MU-0003`.
+- Returns the mock user's `login`, `platform`, `app_version`, `tags` (what Telios set up) and `calls`.
+
+#### POST /repro/runs
+Installs a build on a device, logs in as the mock user, and follows the steps in order.
+
+Body (all four fields are required):
+- `build_id`: e.g. `ios-18.5`.
+- `mock_user_id`: from Telios, e.g. `MU-0003`.
+- `device_id`: from `GET /devices`, e.g. `iphone-15`.
+- `steps`: a list of `{"screen": "...", "action": "...", "params": {...}}`.
+  - Use the same `screen` and `action` names as the user's journey events.
+  - `params` is optional. Copy ids from the journey, e.g. `{"restaurant_id": "R-1000"}` or `{"order_id": "O-1000"}`.
+
+The build, the device and the mock user must all be on the same platform.
+
+Example body:
+```json
+{"build_id": "ios-18.5", "mock_user_id": "MU-0003", "device_id": "iphone-15",
+ "steps": [{"screen": "search", "action": "open"},
+           {"screen": "restaurant", "action": "open", "params": {"restaurant_id": "R-1000"}}]}
+```
+
+Returns:
+- `run_id`, e.g. `RUN-0007`
+- `result`: `reproduced` or `not_reproduced`
+- `observed`: what was seen
+- `artifacts`: video and screenshot URLs
+- `network`: the calls the app made, with status and response
+
+Errors: 422 means the platforms don't match. 404 means an unknown build, device or mock user.
+
+#### GET /fixes
+- Query (optional): `bug_ref`. This is a known bug id (`BUG-1234`) or a report id (`RPT-123`).
+- Example: `GET /fixes?bug_ref=RPT-123`
+- Returns published fixes. `ships_in` is the build id to re-test a frontend fix on, e.g. `ios-18.6-rc1`.
+
+#### GET /fixes/{fix_id}
+- Path: `fix_id`, e.g. `FIX-ABC-01`.
+- Returns one published fix. Returns 404 if it hasn't been published yet.
+
+#### GET /users/{user_id}
+- Path: `user_id`, e.g. `U-12345`.
+- Returns the real user's profile, including `device_id` and `app_version`.
+
+#### GET /users/{user_id}/journey
+- Path: `user_id`.
+- Returns `events`, oldest first. Each has `ts`, `screen`, `action` and `params`. Build your `steps` from these.
 
 ## Reproducing a bug
 

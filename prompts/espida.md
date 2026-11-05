@@ -19,22 +19,58 @@ There is no fixed flow. Any agent can ask any other agent, and each one answers 
 
 ## Tools: the Bugmock API
 
-Base URL: `$BUGMOCK_URL` (default `http://localhost:8090`). Errors look like `{"detail": "..."}`.
+**Base URL:** `https://<tunnel>.trycloudflare.com`
 
-- `GET /logs` with query params:
-  - `user_id`
-  - `env=prod` (default) or `env=sandbox`
-  - `source=backend|client`
-  - `service`
-  - `from` and `to`: ISO 8601 with an offset. Prefer UTC, e.g. `2026-11-04T04:00:00Z`. If you use `+05:30`, URL-encode the `+` as `%2B`. A time with no offset is rejected with 422.
+Every call below goes to this base URL. For example, `GET /deploys` means
+`curl https://<tunnel>.trycloudflare.com/deploys`.
 
-  Results are sorted by time. Each entry has `service`, `endpoint`, `status`, `level`, `message`, `trace_id`, `app_version`, `error_signature` and `response_excerpt`.
-- `GET /traces/{trace_id}`: every log line for one request, across services.
-- `GET /deploys`: prod deploys (optionally `?service=`). Each has the version, time and change description.
-- `GET /impact/{error_signature}`: how many users hit an error since when, split by app version.
-- `GET /teams`: which team owns which service or screen.
-- `GET /sandbox/services`: the service versions running in the sandbox (to confirm a fix is deployed).
-- `GET /users/{user_id}`, `GET /users/{user_id}/journey`: use the journey's timestamps to pick your log window.
+- Errors look like `{"detail": "<message>"}`: 404 means an unknown id, 422 means an invalid param.
+- If the base URL stops answering, the demo was restarted. Ask the operator for the new URL.
+
+#### GET /logs
+Log lines, oldest first. Every query param is optional, and you can combine them.
+
+Query params:
+- `user_id`: a real user (`U-12345`). With `env=sandbox`, use a mock user from Telios instead (`MU-0001`).
+- `env`: `prod` (the default) or `sandbox`.
+- `source`: `backend`, or `client` for errors logged by the app.
+- `service`: one of `membership-service`, `payment-service`, `cart-service`, `checkout-service`, `order-tracking-service`, `restaurant-service`, `promo-service`, `search-service`, `android-app`, `ios-app`.
+- `from` and `to`: ISO 8601 times **with an offset**.
+  - Prefer UTC, e.g. `2026-11-04T04:00:00Z`.
+  - If you use `+05:30`, URL-encode the `+` as `%2B`.
+  - A time without an offset gets a 422.
+
+Example: `GET /logs?user_id=U-12345&source=client&from=2026-11-04T04:00:00Z&to=2026-11-04T05:00:00Z`
+
+Returns a list. Each item has: `log_id`, `ts`, `env`, `source`, `service`, `endpoint`, `method`, `status`, `level` (`info`, `warn` or `error`), `trace_id`, `user_id`, `app_version`, `message`, `error_signature`, `response_excerpt`.
+
+#### GET /traces/{trace_id}
+- Path: `trace_id`, taken from a log line, e.g. `tr-abc-1`.
+- Returns every log line in that trace, prod and sandbox, across services.
+
+#### GET /deploys
+- Query (optional): `service`, e.g. `order-tracking-service`.
+- Returns prod deploys, oldest first: `deploy_id`, `service`, `version`, `deployed_at`, `change`.
+
+#### GET /impact/{error_signature}
+- Path: `error_signature`, taken from a log line's `error_signature`.
+- Returns `error_signature`, `first_seen`, `affected_users`, `by_app_version` (users per app version) and `note`.
+
+#### GET /teams
+No params.
+- Returns `team_id`, `name`, `kind` (`frontend` or `backend`), `owns` (services or screens) and `channel`.
+
+#### GET /sandbox/services
+No params.
+- Returns the service versions running in the sandbox, e.g. `{"order-tracking-service": "5.3.1", ...}`. Use it to confirm a backend fix has been deployed.
+
+#### GET /users/{user_id}
+- Path: `user_id`, e.g. `U-12345`.
+- Returns the real user's profile, including `platform`, `app_version` and `device_id`.
+
+#### GET /users/{user_id}/journey
+- Path: `user_id`.
+- Returns `events`, oldest first, each with a `ts`. Use those timestamps to choose `from` and `to`.
 
 ## Investigating a bug
 

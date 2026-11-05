@@ -28,7 +28,8 @@ This runs the API on this laptop (port 8095, or set `PORT=…`) and exposes it t
 quick tunnel. You don't need an account. Set the printed URL as `BUGMOCK_URL` for the hosted agents.
 
 - **The URL is temporary.** It changes every time the script starts, and it stops working when the
-  script stops or the laptop sleeps.
+  script stops or the laptop sleeps. The script rewrites the base URL in `prompts/*.md` to the new
+  one, so re-paste the prompts into your agents after a restart.
 - **The script won't start on a busy port.** If something else already owns the port, it exits
   instead of exposing that service.
 - **The API is open to anyone who has the URL**, including `/admin`, which is hidden from

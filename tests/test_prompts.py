@@ -33,3 +33,26 @@ def test_prompt_hides_admin_and_names_peers(agent):
     assert "/admin" not in text
     for peer in AGENTS:
         assert peer.capitalize() in text, f"{agent}.md does not mention {peer.capitalize()}"
+
+
+def scenario_values() -> set[str]:
+    """Ids and values that would give a scenario away if a prompt contained them."""
+    from bugmock.store import DATA_DIR, Store, load_dataset
+
+    s = Store(load_dataset(DATA_DIR))
+    values = set(s.users) | set(s.reports) | set(s.known_bugs) | set(s.fixes) | set(s.impacts)
+    values |= {log.trace_id for log in s.logs}
+    for journey in s.journeys.values():
+        for event in journey.events:
+            for key in ("restaurant_id", "code", "order_id"):
+                if key in event.params:
+                    values.add(str(event.params[key]))
+    return values
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_prompt_has_base_url_and_no_scenario_values(agent):
+    text = (PROMPTS / f"{agent}.md").read_text()
+    assert re.search(r"\*\*Base URL:\*\* `https://[^`]+`", text), f"{agent}.md has no base URL line"
+    leaked = sorted(v for v in scenario_values() if v in text)
+    assert not leaked, f"{agent}.md gives away scenario values: {leaked}"

@@ -18,19 +18,59 @@ There is no fixed flow. Any agent can ask any other agent, and each one answers 
 
 ## Tools: the Bugmock API
 
-Base URL: `$BUGMOCK_URL` (default `http://localhost:8090`). Every response is JSON. Errors look like
-`{"detail": "..."}`: 404 means an unknown id, 422 means bad input.
+**Base URL:** `https://<tunnel>.trycloudflare.com`
 
-- `GET /reports/{report_id}`: the Slack report (text, user_id, posted_at, attachments).
-- `GET /known-bugs`, `GET /known-bugs/{bug_id}`: the bug database (status, affected platforms/versions/OS, fixed_in, thread_url, error_signature).
-- `GET /users/{user_id}`: profile: platform, app_version, device_id, city, group, plan, plan_status, cohort_id, flags.
-- `GET /users/{user_id}/journey`: what the user did, in time order (screen, action, params).
-- `GET /cohorts/{cohort_id}`: cohort broken into labelled parts (city name, group label).
-- `GET /devices`: device models and OS versions (to see the user's OS from their device_id).
-- `GET /fixes`: fixes by `bug_ref` (a known bug id or a report id), with where they ship. A fix only appears once its team has published it.
-- `GET /teams`: which team owns which screen or service, and its channel.
+Every call below goes to this base URL. For example, `GET /users/{user_id}` means
+`curl https://<tunnel>.trycloudflare.com/users/U-12345`.
 
-Never invent data. If the API doesn't have it, ask the agent who owns it, or ask the reporter.
+- Responses are JSON.
+- Errors look like `{"detail": "<message>"}`: 404 means an unknown id, 422 means a missing or invalid param. The message says what to fix.
+- If the base URL stops answering, the demo was restarted. Ask the operator for the new URL.
+
+#### GET /reports/{report_id}
+The bug report as it was posted in the channel.
+- Path: `report_id`, e.g. `RPT-123`.
+- Returns: `report_id`, `channel`, `posted_at`, `reporter`, `user_id`, `text`, `attachments`.
+
+#### GET /known-bugs
+Every bug already in the bug database. No params.
+- Returns a list. Each item has: `bug_id`, `title`, `status` (`open`, `fixed` or `wont_fix`), `layer`, `affected_platforms`, `affected_versions`, `affected_os` (null means any OS), `fixed_in`, `thread_url`, `summary`, `error_signature`.
+
+#### GET /known-bugs/{bug_id}
+- Path: `bug_id`, e.g. `BUG-1234`.
+- Returns one known bug, with the same fields as above.
+
+#### GET /users/{user_id}
+The real user's profile.
+- Path: `user_id`, taken from the report, e.g. `U-12345`.
+- Returns: `user_id`, `platform`, `app_version`, `device_id`, `city`, `area`, `group`, `plan`, `plan_status`, `cohort_id`, `signup_date`, `flags`.
+
+#### GET /users/{user_id}/journey
+What the user did in the app, oldest first.
+- Path: `user_id`, e.g. `U-12345`.
+- Returns: `{"user_id": "...", "events": [{"ts": "...", "screen": "...", "action": "...", "params": {...}}]}`.
+- An event's `params` holds details such as `restaurant_id`, `items`, `code` (a coupon), `order_id`, `amount` or `message`.
+
+#### GET /cohorts/{cohort_id}
+- Path: `cohort_id`, taken from the profile. Format: `<platform>-<app_version>-<city>-<group>-<plan>`, e.g. `ios-18.4-BOM-G5-gold_monthly`.
+- Returns the parts with labels: `platform`, `app_version`, `city: {code, name}`, `group: {id, label}`, `plan`.
+
+#### GET /devices
+No params.
+- Returns `device_id`, `model`, `platform`, `os_version` and `screen` for each device.
+- Use it to find the user's OS version from their `device_id`.
+
+#### GET /fixes
+- Query (optional): `bug_ref`. This is a known bug id (`BUG-1234`) or a report id (`RPT-123`).
+- Example: `GET /fixes?bug_ref=RPT-123`
+- Returns published fixes: `fix_id`, `bug_ref`, `team_id`, `layer`, `title`, `pr_url`, and `ships_in`. `ships_in` is either a build id such as `android-18.6-rc1`, or `<service>@<version>`.
+- A fix only appears after its team has published it.
+
+#### GET /teams
+No params.
+- Returns `team_id`, `name`, `kind` (`frontend` or `backend`), `owns` (services or screens) and `channel`.
+
+Never invent data. If the API doesn't have something, ask the agent who owns it, or ask the reporter.
 
 ## When a new report arrives
 
