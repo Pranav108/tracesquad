@@ -4,12 +4,13 @@ This is the only mutable state in the service. It lives in memory and resets on 
 or on POST /sandbox/reset.
 """
 
+import re
 from typing import Any
 
 from pydantic import BaseModel
 
 from bugmock.errors import ApiError
-from bugmock.models import LogEntry
+from bugmock.models import Build, LogEntry
 from bugmock.store import DataError, Store, parse_cohort_id
 
 
@@ -21,6 +22,21 @@ class MockUser(BaseModel):
     login: dict[str, str]
     tags: list[str]
     calls: list[dict[str, Any]]
+
+
+_ATLAS_SUFFIX = re.compile(r"-atlas-\d+$")
+
+
+def base_version(version: str) -> str:
+    """'3.12.0-atlas-2' -> '3.12.0'; other versions unchanged."""
+    return _ATLAS_SUFFIX.sub("", version)
+
+
+class DynamicBuild(Build):
+    """A build Atlas produced. Never serialize base_build_id/fixes_scenario to agents."""
+
+    base_build_id: str
+    fixes_scenario: str | None = None
 
 
 def has_tag(tags: list[str], requirement: str) -> bool:
@@ -37,8 +53,13 @@ class Sandbox:
         self.logs: list[LogEntry] = []
         self.services: dict[str, str] = dict(self.store.dataset.sandbox_defaults)
         self.published_fixes: set[str] = {f.fix_id for f in self.store.dataset.fixes if f.published}
+        self.attempts: list[dict[str, Any]] = []
+        self.dynamic_builds: dict[str, DynamicBuild] = {}
+        # service -> scenario its current Atlas deploy fixes (None: the deploy fixes nothing)
+        self.fixed_by_deploy: dict[str, str | None] = {}
         self._user_seq = 0
         self._run_seq = 0
+        self._attempt_seq = 0
 
     def create_user(self, cohort_id: str) -> MockUser:
         try:
@@ -115,7 +136,12 @@ class Sandbox:
         if service not in self.services:
             raise ApiError(404, f"service '{service}' not found in sandbox; see GET /sandbox/services")
         self.services[service] = version
+        self.fixed_by_deploy[service] = None
         return dict(self.services)
+
+    def next_attempt_no(self) -> int:
+        self._attempt_seq += 1
+        return self._attempt_seq
 
     def next_run_id(self) -> str:
         self._run_seq += 1

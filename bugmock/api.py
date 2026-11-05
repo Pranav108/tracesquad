@@ -8,6 +8,7 @@ from fastapi import APIRouter, Body, FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from bugmock.atlas import FixRequest, submit_fix
 from bugmock.errors import ApiError
 from bugmock.models import LogEntry
 from bugmock.repro import ReproRequest, run_repro
@@ -143,12 +144,21 @@ def get_impact(error_signature: str, request: Request) -> dict[str, Any]:
 
 @telios.get("/builds", summary="Every app build that can be fetched")
 def list_builds(request: Request) -> list[dict[str, Any]]:
-    return [b.model_dump(mode="json") for b in _store(request).builds.values()]
+    static = [b.model_dump(mode="json") for b in _store(request).builds.values()]
+    return static + [_dynamic_build_view(b) for b in _sandbox(request).dynamic_builds.values()]
 
 
 @telios.get("/builds/{build_id}", summary="One build, e.g. android-18.2: where it comes from and its download URL")
 def get_build(build_id: str, request: Request) -> dict[str, Any]:
+    dynamic = _sandbox(request).dynamic_builds.get(build_id)
+    if dynamic is not None:
+        return _dynamic_build_view(dynamic)
     return _get(_store(request).builds, build_id, "build").model_dump(mode="json")
+
+
+def _dynamic_build_view(build) -> dict[str, Any]:
+    # never reveal which scenario (if any) an Atlas build fixes
+    return build.model_dump(mode="json", exclude={"base_build_id", "fixes_scenario"})
 
 
 @telios.get("/setup-apis", summary="Catalog of sandbox setup APIs: params, prerequisites, tags they add")
@@ -165,21 +175,28 @@ def _published(request: Request) -> set[str]:
     return request.app.state.sandbox.published_fixes
 
 
-@teams.get("/fixes", summary="Published fixes, optionally for one bug (known bug id or report id)")
+_HIDDEN_FIX_FIELDS = {"published", "target", "platforms"}
+
+
+@teams.get("/fixes", summary="Atlas fix attempts and already-published fixes, optionally for one bug (known bug id or report id)")
 def list_fixes(request: Request, bug_ref: str | None = None) -> list[dict[str, Any]]:
     published = _published(request)
     fixes = [
-        f for f in _store(request).fixes.values()
+        f.model_dump(mode="json", exclude=_HIDDEN_FIX_FIELDS) for f in _store(request).fixes.values()
         if f.fix_id in published and (bug_ref is None or f.bug_ref == bug_ref)
     ]
-    return [f.model_dump(mode="json", exclude={"published"}) for f in fixes]
+    attempts = [dict(a) for a in _sandbox(request).attempts if bug_ref is None or a["bug_ref"] == bug_ref]
+    return fixes + attempts
 
 
-@teams.get("/fixes/{fix_id}", summary="One published fix: team, PR and where it ships")
+@teams.get("/fixes/{fix_id}", summary="One fix: an Atlas attempt (ATL-…) or a published fix")
 def get_fix(fix_id: str, request: Request) -> dict[str, Any]:
+    for attempt in _sandbox(request).attempts:
+        if attempt["attempt_id"] == fix_id:
+            return dict(attempt)
     if fix_id not in _published(request):
         raise ApiError(404, f"fix '{fix_id}' not found (or not published yet)")
-    return _store(request).fixes[fix_id].model_dump(mode="json", exclude={"published"})
+    return _store(request).fixes[fix_id].model_dump(mode="json", exclude=_HIDDEN_FIX_FIELDS)
 
 
 @teams.post("/fixes/{fix_id}/publish", summary="Operator: announce a fix so agents can see it", include_in_schema=False)
@@ -258,6 +275,11 @@ def list_changes(
         and (since is None or c.merged_at.date() >= since)
     ]
     return [c.model_dump(mode="json") for c in sorted(changes, key=lambda c: c.merged_at, reverse=True)]
+
+
+@atlas_routes.post("/atlas/fixes", summary="Submit a fix: opens a PR and returns a new build (frontend) or a pre-prod deploy (backend)")
+def post_atlas_fix(body: FixRequest, request: Request) -> dict[str, Any]:
+    return submit_fix(body, _store(request), _sandbox(request))
 
 
 @gremlin.get("/prds", summary="All PRDs")

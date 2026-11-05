@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from bugmock.errors import ApiError
 from bugmock.models import Build, LogEntry, LogTemplate, Trigger
-from bugmock.sandbox import MockUser, Sandbox, has_tag
+from bugmock.sandbox import MockUser, Sandbox, base_version, has_tag
 from bugmock.store import Store
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -59,11 +59,14 @@ def _write_logs(sandbox: Sandbox, templates: list[LogTemplate], run_id: str, use
 
 
 def run_repro(req: ReproRequest, store: Store, sandbox: Sandbox) -> ReproResult:
-    if req.build_id not in store.builds:
+    dynamic = sandbox.dynamic_builds.get(req.build_id)
+    if req.build_id not in store.builds and dynamic is None:
         raise ApiError(404, f"build '{req.build_id}' not found; see GET /builds")
     if req.device_id not in store.devices:
         raise ApiError(404, f"device '{req.device_id}' not found; see GET /devices")
-    build, device = store.builds[req.build_id], store.devices[req.device_id]
+    build, device = store.builds.get(req.build_id) or dynamic, store.devices[req.device_id]
+    # an Atlas build behaves like its base build, unless it carries the fix for the rule's scenario
+    effective_build_id = dynamic.base_build_id if dynamic else build.build_id
     user = sandbox.get(req.mock_user_id)
     if not build.platform == device.platform == user.platform:
         raise ApiError(
@@ -79,9 +82,15 @@ def run_repro(req: ReproRequest, store: Store, sandbox: Sandbox) -> ReproResult:
         if not state_ok:
             # The user never reached the state this flow needs, so we can't say what the backend did.
             continue
-        backend_buggy = rule.backend is not None and sandbox.services.get(rule.backend.service) in rule.backend.versions
+        backend_buggy = (
+            rule.backend is not None
+            and base_version(sandbox.services.get(rule.backend.service, "")) in rule.backend.versions
+            and sandbox.fixed_by_deploy.get(rule.backend.service) != rule.scenario_id
+        )
+        build_fixed = dynamic is not None and dynamic.fixes_scenario == rule.scenario_id
         reproduces = (
-            ("*" in rule.affected_builds or build.build_id in rule.affected_builds)
+            not build_fixed
+            and ("*" in rule.affected_builds or effective_build_id in rule.affected_builds)
             and (rule.devices is None or device.device_id in rule.devices)
             and (rule.backend is None or backend_buggy)
         )
