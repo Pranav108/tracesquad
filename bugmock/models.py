@@ -30,7 +30,7 @@ class Build(BaseModel):
     build_id: str
     platform: Platform
     app_version: str
-    source: Literal["s3", "play", "github_actions"]
+    source: Literal["s3", "play", "github_actions", "atlas"]
     branch: str
     download_url: str
     ready_in_minutes: int
@@ -186,6 +186,10 @@ class Fix(BaseModel):
     title: str
     pr_url: str
     ships_in: str
+    # service name (backend) or app screen (frontend) the fix changes
+    target: str
+    # platforms a frontend fix applies to
+    platforms: list[str] = []
     # True for fixes that already shipped before the scenario (visible from the start)
     published: bool = False
 
@@ -199,6 +203,93 @@ class Scenario(BaseModel):
     fix_id: str | None = None
     expected_path: list[str]
     unexpected_paths: list[str] = []
+
+
+class Change(BaseModel):
+    change_id: str
+    repo: str
+    area: str
+    platforms: list[str] | None = None
+    title: str
+    summary: str
+    pr_url: str
+    team_id: str
+    merged_at: datetime
+    released_in: str
+
+
+class ApiResponse(BaseModel):
+    status: int
+    body: dict[str, Any]
+
+
+class BuggyWhen(BaseModel):
+    versions: list[str]
+    app_versions: list[str] | None = None
+    tags: list[str] = []
+
+
+class ApiCheckDef(BaseModel):
+    check_def_id: str
+    scenario_id: str
+    service: str
+    method: str
+    endpoint: str
+    requires_tags: list[str] = []
+    missing_response: ApiResponse
+    buggy_when: BuggyWhen
+    buggy_response: ApiResponse
+    ok_response: ApiResponse
+
+
+class PrdSection(BaseModel):
+    heading: str
+    body: str
+
+
+class ChangelogEntry(BaseModel):
+    date: date
+    change: str
+    reason: str
+    bug_ref: str | None = None
+
+
+class Prd(BaseModel):
+    prd_id: str
+    title: str
+    feature: str
+    owner_team: str
+    status: Literal["live", "in_progress"]
+    target_release: str
+    summary: str
+    sections: list[PrdSection] = []
+    known_issues: list[str] = []
+    changelog: list[ChangelogEntry] = []
+
+
+class Release(BaseModel):
+    release_id: str
+    kind: Literal["app", "backend"]
+    version: str
+    status: Literal["released", "in_qa", "planned"]
+    code_cutoff: date | None = None
+    release_date: date | None = None
+    notes: list[str] = []
+
+
+class ThreadMessage(BaseModel):
+    author: str
+    ts: datetime
+    text: str
+
+
+class Thread(BaseModel):
+    thread_id: str
+    channel: str
+    title: str
+    started_at: datetime
+    prd_id: str | None = None
+    messages: list[ThreadMessage] = []
 
 
 class Dataset(BaseModel):
@@ -218,5 +309,10 @@ class Dataset(BaseModel):
     repro_rules: list[ReproRule] = []
     fixes: list[Fix] = []
     scenarios: list[Scenario] = []
+    changes: list[Change] = []
+    api_checks: list[ApiCheckDef] = []
+    prds: list[Prd] = []
+    releases: list[Release] = []
+    threads: list[Thread] = []
     # filled by the loader: scenario_id -> known bug ids defined in that scenario's file
     scenario_known_bugs: dict[str, list[str]] = {}

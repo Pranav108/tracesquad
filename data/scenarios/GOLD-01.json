@@ -100,6 +100,6 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-GOLD-01", "bug_ref": "RPT-101", "team_id": "membership-be", "layer": "backend", "title": "Invalidate status cache synchronously on membership.renewed", "pr_url": "https://git.example.invalid/membership-service/pull/4412", "ships_in": "membership-service@3.12.1"}
+    {"fix_id": "FIX-GOLD-01", "bug_ref": "RPT-101", "team_id": "membership-be", "layer": "backend", "title": "Invalidate status cache synchronously on membership.renewed", "pr_url": "https://git.example.invalid/membership-service/pull/4412", "ships_in": "membership-service@3.12.1", "target": "membership-service"}
   ]
 }

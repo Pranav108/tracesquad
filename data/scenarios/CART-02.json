@@ -105,6 +105,6 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-CART-02", "bug_ref": "RPT-102", "team_id": "checkout-fe", "layer": "frontend", "title": "Render discount rows when label is missing", "pr_url": "https://git.example.invalid/consumer-app/pull/9921", "ships_in": "android-18.6-rc1"}
+    {"fix_id": "FIX-CART-02", "bug_ref": "RPT-102", "team_id": "checkout-fe", "layer": "frontend", "title": "Render discount rows when label is missing", "pr_url": "https://git.example.invalid/consumer-app/pull/9921", "ships_in": "android-18.6-rc1", "target": "checkout", "platforms": ["android", "ios"]}
   ]
 }

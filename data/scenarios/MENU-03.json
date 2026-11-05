@@ -86,6 +86,6 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-MENU-03", "bug_ref": "RPT-103", "team_id": "discovery-fe", "layer": "frontend", "title": "Clamp restaurant name to two lines and move the rating badge below it on small screens", "pr_url": "https://git.example.invalid/consumer-app/pull/9934", "ships_in": "ios-18.6-rc1"}
+    {"fix_id": "FIX-MENU-03", "bug_ref": "RPT-103", "team_id": "discovery-fe", "layer": "frontend", "title": "Clamp restaurant name to two lines and move the rating badge below it on small screens", "pr_url": "https://git.example.invalid/consumer-app/pull/9934", "ships_in": "ios-18.6-rc1", "target": "restaurant", "platforms": ["ios"]}
   ]
 }

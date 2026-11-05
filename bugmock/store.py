@@ -28,6 +28,11 @@ ID_FIELDS = {
     "repro_rules": "rule_id",
     "fixes": "fix_id",
     "scenarios": "scenario_id",
+    "changes": "change_id",
+    "api_checks": "check_def_id",
+    "prds": "prd_id",
+    "releases": "release_id",
+    "threads": "thread_id",
 }
 
 
@@ -143,6 +148,21 @@ def _check_integrity(ds: Dataset) -> None:
     for f in ds.fixes:
         need(f.team_id, teams, f"fix {f.fix_id} team_id")
         need(f.bug_ref, known_bugs | reports, f"fix {f.fix_id} bug_ref")
+    services = set(ds.sandbox_defaults)
+    scenarios = {s.scenario_id for s in ds.scenarios}
+    prds = {p.prd_id for p in ds.prds}
+    for f in ds.fixes:
+        if f.layer == "backend":
+            need(f.target, services, f"fix {f.fix_id} target")
+    for c in ds.changes:
+        need(c.team_id, teams, f"change {c.change_id} team_id")
+    for chk in ds.api_checks:
+        need(chk.service, services, f"api check {chk.check_def_id} service")
+        need(chk.scenario_id, scenarios, f"api check {chk.check_def_id} scenario_id")
+    for prd in ds.prds:
+        need(prd.owner_team, teams, f"prd {prd.prd_id} owner_team")
+    for t in ds.threads:
+        need(t.prd_id, prds, f"thread {t.thread_id} prd_id")
     for rule in ds.repro_rules:
         for build_id in rule.affected_builds:
             if build_id != "*":
@@ -170,3 +190,8 @@ class Store:
         self.logs = list(dataset.logs)
         self.deploys = list(dataset.deploys)
         self.repro_rules = list(dataset.repro_rules)
+        self.changes = {c.change_id: c for c in dataset.changes}
+        self.api_checks = {(c.method.upper(), c.endpoint): c for c in dataset.api_checks}
+        self.prds = {p.prd_id: p for p in dataset.prds}
+        self.releases = {r.release_id: r for r in dataset.releases}
+        self.threads = {t.thread_id: t for t in dataset.threads}

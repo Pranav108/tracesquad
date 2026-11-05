@@ -88,3 +88,29 @@ def test_gold01_records():
     assert [d.version for d in s.deploys if d.deploy_id == "DEP-201"] == ["3.12.0"]
     assert s.fixes["FIX-GOLD-01"].ships_in == "membership-service@3.12.1"
     assert s.known_bugs["BUG-1180"].status == "fixed"
+
+
+def test_releases_loaded():
+    ds = load_dataset(DATA_DIR)
+    assert {r.release_id for r in ds.releases} == {"app-18.5", "app-18.6", "app-18.7", "hotfix-2026-11-06"}
+
+
+def test_fix_targets():
+    s = Store(load_dataset(DATA_DIR))
+    assert s.fixes["FIX-GOLD-01"].target == "membership-service"
+    assert s.fixes["FIX-TRACK-05"].target == "order-tracking-service"
+    assert (s.fixes["FIX-CART-02"].target, s.fixes["FIX-CART-02"].platforms) == ("checkout", ["android", "ios"])
+    assert (s.fixes["FIX-MENU-03"].target, s.fixes["FIX-MENU-03"].platforms) == ("restaurant", ["ios"])
+    assert (s.fixes["FIX-PAY-04"].target, s.fixes["FIX-PAY-04"].platforms) == ("payment", ["android"])
+
+
+def test_api_check_service_must_exist(tmp_path):
+    check = {
+        "check_def_id": "API-X", "scenario_id": "X", "service": "ghost-service", "method": "GET", "endpoint": "/x",
+        "requires_tags": [], "missing_response": {"status": 404, "body": {}},
+        "buggy_when": {"versions": ["1.0"]}, "buggy_response": {"status": 200, "body": {}},
+        "ok_response": {"status": 200, "body": {}},
+    }
+    d = write_dataset(tmp_path, base_shared(), {"A": {"api_checks": [check]}})
+    with pytest.raises(DataError, match="ghost-service"):
+        load_dataset(d)

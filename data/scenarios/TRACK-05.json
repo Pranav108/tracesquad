@@ -102,6 +102,6 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-TRACK-05", "bug_ref": "RPT-105", "team_id": "logistics-be", "layer": "backend", "title": "Serve tracking schema v1 to app versions below 18.4", "pr_url": "https://git.example.invalid/order-tracking-service/pull/731", "ships_in": "order-tracking-service@5.3.1"}
+    {"fix_id": "FIX-TRACK-05", "bug_ref": "RPT-105", "team_id": "logistics-be", "layer": "backend", "title": "Serve tracking schema v1 to app versions below 18.4", "pr_url": "https://git.example.invalid/order-tracking-service/pull/731", "ships_in": "order-tracking-service@5.3.1", "target": "order-tracking-service"}
   ]
 }
