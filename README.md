@@ -1,6 +1,8 @@
 # Bugmock
 
 Mock data service for the bug agents **Triage**, **Telios**, **Kinetics** and **Espida**.
+For how the whole system works (agents, prompts, protocol, data, decisions and flow diagrams), see
+[docs/SYSTEM.md](docs/SYSTEM.md).
 Every answer comes from hand-written JSON in `data/`. The only state is a small in-memory
 sandbox (mock users, sandbox service versions, sandbox logs) that resets on restart or on
 `POST /sandbox/reset`.
