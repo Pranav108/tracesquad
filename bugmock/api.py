@@ -1,6 +1,6 @@
 """FastAPI app serving the mock data, with routes grouped by the agent that uses them."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -313,15 +313,95 @@ def get_thread(thread_id: str, request: Request) -> dict[str, Any]:
 
 
 def _prd_view(request: Request, prd) -> dict[str, Any]:
-    return prd.model_dump(mode="json")
+    view = prd.model_dump(mode="json")
+    sandbox = _sandbox(request)
+    view["changelog"] += sandbox.prd_changelog.get(prd.prd_id, [])
+    view["known_issues"] += sandbox.prd_known_issues.get(prd.prd_id, [])
+    return view
 
 
 def _release_view(request: Request, release) -> dict[str, Any]:
-    return release.model_dump(mode="json")
+    view = release.model_dump(mode="json")
+    view["notes"] += _sandbox(request).release_notes.get(release.release_id, [])
+    return view
 
 
 def _thread_view(request: Request, thread) -> dict[str, Any]:
-    return thread.model_dump(mode="json")
+    view = thread.model_dump(mode="json")
+    view["messages"] += _sandbox(request).thread_replies.get(thread.thread_id, [])
+    return view
+
+
+class PrdUpdate(BaseModel):
+    change: str
+    reason: str
+    bug_ref: str
+    known_issue: str | None = None
+
+
+class ReleaseNote(BaseModel):
+    bug_ref: str
+    note: str
+
+
+class ThreadReply(BaseModel):
+    bug_ref: str
+    text: str
+
+
+class Rca(BaseModel):
+    bug_ref: str
+    title: str
+    what_happened: str
+    root_cause: str
+    culprit_change_id: str
+    fix: dict[str, Any]
+    verification: dict[str, Any]
+    impact: str
+    follow_ups: list[str] = []
+
+
+def _now_ist() -> datetime:
+    return datetime.now(timezone(timedelta(hours=5, minutes=30)))
+
+
+@gremlin.post("/prds/{prd_id}/updates", summary="Add a changelog entry (and optionally a known issue) to a PRD")
+def post_prd_update(prd_id: str, body: PrdUpdate, request: Request) -> dict[str, Any]:
+    prd = _get(_store(request).prds, prd_id, "prd")
+    sandbox = _sandbox(request)
+    entry = {"date": _now_ist().date().isoformat(), "change": body.change, "reason": body.reason, "bug_ref": body.bug_ref}
+    sandbox.prd_changelog.setdefault(prd_id, []).append(entry)
+    if body.known_issue:
+        sandbox.prd_known_issues.setdefault(prd_id, []).append(body.known_issue)
+    return _prd_view(request, prd)
+
+
+@gremlin.post("/releases/{release_id}/notes", summary="Add a note to a release (e.g. which fix it carries)")
+def post_release_note(release_id: str, body: ReleaseNote, request: Request) -> dict[str, Any]:
+    release = _get(_store(request).releases, release_id, "release")
+    _sandbox(request).release_notes.setdefault(release_id, []).append(body.note)
+    return _release_view(request, release)
+
+
+@gremlin.post("/threads/{thread_id}/replies", summary="Reply in a thread in another channel")
+def post_thread_reply(thread_id: str, body: ThreadReply, request: Request) -> dict[str, Any]:
+    thread = _get(_store(request).threads, thread_id, "thread")
+    reply = {"author": "Gremlin", "ts": _now_ist().isoformat(), "text": body.text}
+    _sandbox(request).thread_replies.setdefault(thread_id, []).append(reply)
+    return _thread_view(request, thread)
+
+
+@gremlin.post("/rca", summary="Store the final RCA for a bug (report id)")
+def post_rca(body: Rca, request: Request) -> dict[str, Any]:
+    _get(_store(request).reports, body.bug_ref, "report")
+    rca = body.model_dump(mode="json")
+    _sandbox(request).rcas[body.bug_ref] = rca
+    return rca
+
+
+@gremlin.get("/rca/{bug_ref}", summary="The final RCA for a bug, once Gremlin has written it")
+def get_rca(bug_ref: str, request: Request) -> dict[str, Any]:
+    return dict(_get(_sandbox(request).rcas, bug_ref, "rca for report"))
 
 
 kinetics = APIRouter(tags=["Kinetics: devices, repro runs and API checks"])

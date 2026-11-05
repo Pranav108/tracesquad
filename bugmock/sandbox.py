@@ -60,6 +60,12 @@ class Sandbox:
         self._user_seq = 0
         self._run_seq = 0
         self._attempt_seq = 0
+        # Gremlin's writes, keyed by prd / release / thread id and by report id for RCAs
+        self.prd_changelog: dict[str, list[dict[str, Any]]] = {}
+        self.prd_known_issues: dict[str, list[str]] = {}
+        self.release_notes: dict[str, list[str]] = {}
+        self.thread_replies: dict[str, list[dict[str, Any]]] = {}
+        self.rcas: dict[str, dict[str, Any]] = {}
         self._check_seq = 0
 
     def create_user(self, cohort_id: str) -> MockUser:
