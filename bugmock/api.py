@@ -1,6 +1,6 @@
 """FastAPI app serving the mock data, with routes grouped by the agent that uses them."""
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -182,7 +182,7 @@ def get_fix(fix_id: str, request: Request) -> dict[str, Any]:
     return _store(request).fixes[fix_id].model_dump(mode="json", exclude={"published"})
 
 
-@teams.post("/fixes/{fix_id}/publish", summary="Teams: announce a fix so agents can see it")
+@teams.post("/fixes/{fix_id}/publish", summary="Operator: announce a fix so agents can see it", include_in_schema=False)
 def publish_fix(fix_id: str, request: Request) -> dict[str, Any]:
     fix = _get(_store(request).fixes, fix_id, "fix")
     _published(request).add(fix_id)
@@ -223,7 +223,9 @@ def get_mock_user(mock_user_id: str, request: Request) -> dict[str, Any]:
     return _sandbox(request).get(mock_user_id).model_dump()
 
 
-@sandbox_routes.post("/deploy", summary="Deploy a service version to the sandbox (e.g. a backend fix)")
+@sandbox_routes.post(
+    "/deploy", summary="Operator: deploy a service version to the sandbox", include_in_schema=False
+)
 def deploy(body: DeployRequest, request: Request) -> dict[str, str]:
     return _sandbox(request).deploy(body.service, body.version)
 
@@ -239,6 +241,64 @@ def get_services(request: Request) -> dict[str, str]:
 def reset_sandbox(request: Request) -> dict[str, bool]:
     _sandbox(request).reset()
     return {"reset": True}
+
+
+atlas_routes = APIRouter(tags=["Atlas: recent changes and fixes"])
+gremlin = APIRouter(tags=["Gremlin: PRDs, releases, threads, RCA"])
+
+
+@atlas_routes.get("/changes", summary="Recently merged PRs, newest first; filter by repo, area or since (YYYY-MM-DD)")
+def list_changes(
+    request: Request, repo: str | None = None, area: str | None = None, since: date | None = None
+) -> list[dict[str, Any]]:
+    changes = [
+        c for c in _store(request).changes.values()
+        if (repo is None or c.repo == repo)
+        and (area is None or c.area == area)
+        and (since is None or c.merged_at.date() >= since)
+    ]
+    return [c.model_dump(mode="json") for c in sorted(changes, key=lambda c: c.merged_at, reverse=True)]
+
+
+@gremlin.get("/prds", summary="All PRDs")
+def list_prds(request: Request) -> list[dict[str, Any]]:
+    return [_prd_view(request, p) for p in _store(request).prds.values()]
+
+
+@gremlin.get("/prds/{prd_id}", summary="One PRD with its sections, known issues and changelog")
+def get_prd(prd_id: str, request: Request) -> dict[str, Any]:
+    return _prd_view(request, _get(_store(request).prds, prd_id, "prd"))
+
+
+@gremlin.get("/releases", summary="App releases and the backend hotfix train")
+def list_releases(request: Request) -> list[dict[str, Any]]:
+    return [_release_view(request, r) for r in _store(request).releases.values()]
+
+
+@gremlin.get("/threads", summary="Threads in other channels; q searches titles and messages")
+def list_threads(request: Request, q: str | None = None) -> list[dict[str, Any]]:
+    views = [_thread_view(request, t) for t in _store(request).threads.values()]
+    if q:
+        needle = q.lower()
+        views = [v for v in views if needle in v["title"].lower() or any(needle in m["text"].lower() for m in v["messages"])]
+    return views
+
+
+@gremlin.get("/threads/{thread_id}", summary="One thread with all its messages")
+def get_thread(thread_id: str, request: Request) -> dict[str, Any]:
+    return _thread_view(request, _get(_store(request).threads, thread_id, "thread"))
+
+
+def _prd_view(request: Request, prd) -> dict[str, Any]:
+    return prd.model_dump(mode="json")
+
+
+def _release_view(request: Request, release) -> dict[str, Any]:
+    return release.model_dump(mode="json")
+
+
+def _thread_view(request: Request, thread) -> dict[str, Any]:
+    return thread.model_dump(mode="json")
 
 
 kinetics = APIRouter(tags=["Kinetics: devices and repro runs"])
@@ -291,7 +351,7 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
     async def handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
-    for router in (triage, espida, telios, sandbox_routes, kinetics, teams, admin):
+    for router in (triage, espida, telios, sandbox_routes, kinetics, atlas_routes, gremlin, teams, admin):
         app.include_router(router)
     return app
 

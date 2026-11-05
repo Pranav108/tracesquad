@@ -61,3 +61,29 @@ def test_known_bug_and_fix(client):
     client.post("/fixes/FIX-GOLD-01/publish")
     assert [f["fix_id"] for f in client.get("/fixes", params={"bug_ref": "RPT-101"}).json()] == ["FIX-GOLD-01"]
     assert client.get("/fixes/FIX-NOPE").status_code == 404
+
+
+def test_changes_filter(client):
+    ids = [c["change_id"] for c in client.get("/changes", params={"repo": "membership-service"}).json()]
+    assert ids[0] == "CHG-401"
+    ids = [c["change_id"] for c in client.get("/changes", params={"area": "checkout", "since": "2026-10-01"}).json()]
+    assert "CHG-411" in ids and "CHG-412" not in ids
+
+
+def test_threads_search(client):
+    found = client.get("/threads", params={"q": "join gold"}).json()
+    assert any(t["channel"] == "#gold-support" for t in found)
+    assert client.get("/threads", params={"q": "zzz"}).json() == []
+
+
+def test_prd_and_unknown_404(client):
+    assert client.get("/prds/PRD-GOLD-RENEW").json()["owner_team"] == "membership-be"
+    r = client.get("/prds/PRD-NOPE")
+    assert r.status_code == 404 and "PRD-NOPE" in r.json()["detail"]
+    assert {r["release_id"] for r in client.get("/releases").json()} >= {"app-18.6", "hotfix-2026-11-06"}
+    assert client.get("/threads/THR-121").json()["channel"] == "#design-reviews"
+
+
+def test_operator_routes_hidden(client):
+    paths = client.get("/openapi.json").json()["paths"]
+    assert "/sandbox/deploy" not in paths and "/fixes/{fix_id}/publish" not in paths
