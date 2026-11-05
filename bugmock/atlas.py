@@ -26,6 +26,10 @@ def submit_fix(req: FixRequest, store: Store, sandbox: Sandbox) -> dict[str, Any
         raise ApiError(404, f"change '{req.culprit_change_id}' not found; see GET /changes")
     if req.layer == "frontend" and req.platform is None:
         raise ApiError(422, "a frontend fix needs a platform: android or ios")
+    if req.layer == "frontend":
+        screens = sorted({s for t in store.teams.values() if t.kind == "frontend" for s in t.owns})
+        if req.target not in screens:
+            raise ApiError(422, f"unknown app screen '{req.target}'; use one of: {', '.join(screens)}")
     if req.layer == "backend" and req.target not in sandbox.services:
         raise ApiError(404, f"service '{req.target}' not found in pre-prod; see GET /sandbox/services")
 

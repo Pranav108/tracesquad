@@ -353,11 +353,11 @@ the error.
 ### 6.5 Atlas: which change, which layer?
 
 1. **Read the evidence:** Kinetics's repro (observed, network calls) and Espida's findings (failing call, deploy, impact).
-2. **Find the culprit** with `GET /changes` for the suspect app screen *and* the service behind it, from shortly before the first error. Each scenario hides the real culprit among plausible distractors (same area, wrong cause).
+2. **Find the culprit** with `GET /changes` for the suspect app screen *and* the service behind it. For app changes, look at those released in or before the reporter's app version, since app bugs often ship weeks before anyone reports them. For service changes, look at those deployed shortly before the first error. Each scenario hides the real culprit among plausible distractors (same area, wrong cause).
 3. **Decide the layer** against the intended behaviour, which Gremlin quotes from the PRD:
    - **Backend:** the service broke its contract, returns wrong or stale data, or changed a response that already released app versions depend on (old apps can't be patched).
    - **Frontend:** the service behaves as the contract says, and the app mishandles it, or the layout is wrong.
-4. **Submit** with `POST /atlas/fixes`, then hand it to Kinetics. Atlas doesn't learn whether it's right until Kinetics verifies. After two failed attempts, it escalates to the owning team.
+4. **Check for a baseline, then submit.** Kinetics must already have seen the bug with the mock user it will verify with. Then Atlas submits with `POST /atlas/fixes` and hands the fix to Kinetics. Atlas doesn't learn whether it's right until Kinetics verifies. After two failed attempts, it escalates to the owning team.
 
 ### 6.6 Kinetics: is the fix real?
 
@@ -368,6 +368,10 @@ the error.
 
 A wrong fix looks exactly like a right one until this step: the bug still reproduces, or the API
 still returns the buggy response.
+
+Verification needs a **baseline**: the same mock user must have shown the bug before the fix (a
+`reproduced` run, or the buggy API response). Without one, Kinetics answers `inconclusive`, because a
+user who never had the bug would look "fixed" whatever Atlas did.
 
 ### 6.7 Gremlin: closing the loop
 
@@ -434,10 +438,12 @@ sequenceDiagram
     T->>E: [ASK] What happened in the backend around the renewal?
     Note over E: Status served from cache after renewal<br/>DEP-201 membership-service 3.12.0. Impact 1284 users
     E->>A: [REPORT] Backend: stale membership status. Trace, deploy, impact
-    Note over A: Culprit CHG-401 (cache TTL 24h)<br/>POST /atlas/fixes: backend, membership-service<br/>Pre-prod now runs 3.12.0-atlas-1
     A->>TE: [ASK] Mock user for RPT-101: renewed Gold, Delhi
     TE-->>A: [ANSWER] MU-0001 ready
-    A->>K: [REPORT] Verify GET /v2/membership/status as MU-0001 (was expired)
+    A->>K: [ASK] Baseline: call GET /v2/membership/status as MU-0001
+    K-->>A: [ANSWER] Baseline: status expired (check id)
+    Note over A: Culprit CHG-401 (cache TTL 24h)<br/>POST /atlas/fixes: backend, membership-service<br/>Pre-prod now runs 3.12.0-atlas-1
+    A->>K: [REPORT] Verify the same call as MU-0001 (baseline: expired)
     Note over K: API check: status active<br/>App run on android-18.5: not_reproduced
     K-->>A: [ANSWER] Verified (check id, run id)
     A->>E: [ASK] Confirm in the sandbox logs for MU-0001

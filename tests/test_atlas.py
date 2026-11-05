@@ -51,3 +51,10 @@ def test_fixes_lists_attempts(client):
     assert len(items) == 1 and items[0]["attempt_id"] == "ATL-0001"
     assert "fixes_scenario" not in str(items) and "ships_in" not in items[0]
     assert client.get("/fixes/ATL-0001").json()["build_id"] == "android-18.2-atlas-1"
+
+
+def test_frontend_target_must_be_a_known_screen(client):
+    for bad in ("Checkout", "restaurant_page"):
+        r = fix(client, bug_ref="RPT-102", layer="frontend", target=bad, platform="android", culprit_change_id="CHG-411")
+        assert r.status_code == 422 and bad in r.json()["detail"] and "checkout" in r.json()["detail"]
+    assert client.get("/fixes", params={"bug_ref": "RPT-102"}).json() == []

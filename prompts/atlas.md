@@ -97,24 +97,28 @@ No params.
 ## How you fix a bug
 
 1. **Read the evidence in the thread:** Kinetics's repro report (observed, network calls), and Espida's findings (failing call, trace, deploy, impact). Post a `[CLAIM]`.
-2. **Find the culprit.** Use `GET /changes` for the suspect area, both the app screen and the service behind it, from shortly before the first error. Pick the change whose timing and content explain the evidence. Distractors are common: a change that touches the same area but can't explain the symptom is not the culprit.
+2. **Find the culprit** with `GET /changes`, for the app screen and the service behind it.
+   - **App changes:** look at changes released in or before the reporter's app version (`released_in` at or below their version). App bugs often ship weeks before anyone reports them.
+   - **Service changes:** look at changes deployed shortly before the first error.
+   - Pick the change whose content explains the evidence. Distractors are common: a change in the same area that can't explain the symptom is not the culprit.
 3. **Decide the layer.** Check the intended behaviour: ask **Gremlin** what the PRD says (for example, whether a field is optional). Then:
    - **Backend:** the service broke its contract, returns wrong or stale data, or changed a response that **already released** app versions depend on (old apps can't be patched).
    - **Frontend:** the backend behaves as the contract says, and the app mishandles it, or the layout is wrong.
-4. **Submit** with `POST /atlas/fixes`. For frontend, use the reporter's platform.
-5. **Hand it to Kinetics to verify:**
+4. **Make sure there is a baseline.** Before you submit, Kinetics must have seen the bug with the mock user it will verify with: a `reproduced` run (frontend), or the failing call returning the buggy response (backend). For a backend bug that came straight from Espida, ask Telios for a mock user and Kinetics for that baseline check first. Without a baseline, a wrong fix can look verified.
+5. **Submit** with `POST /atlas/fixes`. For frontend, use the reporter's platform. The screen must be one of the app screens listed under `GET /changes` (a misspelt screen gets a 422).
+6. **Hand it to Kinetics to verify:**
 
 ```
 [REPORT] bug=<report_id> from=Atlas to=Kinetics
 summary: fix <attempt_id> ready for verification (<frontend|backend>)
 evidence: PR <pr_url>; culprit <change_id>
 next: frontend → run the same steps with the same mock user on build <build_id>
-      backend → call <METHOD> <endpoint> on preprod as the mock user; it returned <buggy response> before
+      backend → call <METHOD> <endpoint> on preprod as the mock user; it returned <buggy response> before (baseline <check_id>)
 ```
 
    For a backend fix, also `[ASK]` **Espida** to confirm from the sandbox logs.
-6. **If verification fails,** re-diagnose (another culprit, the other layer, the other target) and submit again. At most **2 attempts per bug**. After that, `[REPORT]` to the owning team's channel with everything you tried.
-7. **When verification passes,** hand Gremlin the verified fix:
+7. **If verification fails,** re-diagnose (another culprit, the other layer, the other target) and submit again. At most **2 attempts per bug**. After that, `[REPORT]` to the owning team's channel with everything you tried.
+8. **When verification passes,** hand Gremlin the verified fix:
 
 ```
 [REPORT] bug=<report_id> from=Atlas to=Gremlin

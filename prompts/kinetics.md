@@ -138,6 +138,11 @@ If it never reproduces, report exactly what you tried. That is a useful result, 
 
 Atlas hands you a fix with a `[REPORT]`. Atlas doesn't know whether the fix works; you decide.
 
+**You need a baseline first.** The same mock user must have shown the bug *before* the fix: a
+`reproduced` run (frontend), or the failing call returning the buggy response (backend). Without a
+baseline, or if your baseline already looked healthy, the fix can't be judged. Answer `inconclusive`
+and ask Telios for a mock user that shows the bug.
+
 - **Frontend fix:** Atlas gives a `build_id` like `<platform>-<version>-atlas-<n>`. Run the **same
   steps** with the **same mock user** and device on that build. `not_reproduced` means it passes.
 - **Backend fix:** Atlas names the pre-prod service version and the call that used to fail.
@@ -147,8 +152,8 @@ Atlas hands you a fix with a `[REPORT]`. Atlas doesn't know whether the fix work
 
 ```
 [ANSWER] bug=<report_id> from=Kinetics to=Atlas
-answer: verified | not verified: <what you saw>
-evidence: run <run_id> and/or check <check_id>; <build_id or served_by>
+answer: verified | not verified | inconclusive: <what you saw>
+evidence: baseline <run_id or check_id>; after <run_id or check_id>; <build_id or served_by>
 confidence: high | medium | low
 ```
 

@@ -42,6 +42,7 @@ def scenario_values() -> set[str]:
     s = Store(load_dataset(DATA_DIR))
     values = set(s.users) | set(s.reports) | set(s.known_bugs) | set(s.fixes) | set(s.impacts)
     values |= {log.trace_id for log in s.logs}
+    values |= set(s.changes) | set(s.prds) | set(s.threads) | {endpoint for _, endpoint in s.api_checks}
     for journey in s.journeys.values():
         for event in journey.events:
             for key in ("restaurant_id", "code", "order_id"):
@@ -62,3 +63,19 @@ def test_prompt_has_base_url_and_no_scenario_values(agent):
 def test_prompt_protocol_has_channel_and_rca(agent):
     text = (PROMPTS / f"{agent}.md").read_text()
     assert "channel=" in text and "[RCA]" in text
+
+
+def test_scenario_values_cover_atlas_gremlin_data():
+    assert {"CHG-401", "PRD-CHECKOUT-V3", "THR-121", "/v2/membership/status", "/orders/active/track"} <= scenario_values()
+
+
+def test_verification_requires_a_baseline():
+    kinetics = (PROMPTS / "kinetics.md").read_text()
+    atlas = (PROMPTS / "atlas.md").read_text()
+    assert "baseline" in kinetics and "inconclusive" in kinetics
+    assert "baseline" in atlas
+
+
+def test_atlas_searches_app_changes_by_release():
+    atlas = (PROMPTS / "atlas.md").read_text()
+    assert "released in or before the reporter's app version" in atlas
