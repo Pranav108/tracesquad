@@ -8,7 +8,7 @@ import pytest
 from bugmock.api import create_app
 
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
-AGENTS = ["triage", "telios", "kinetics", "espida"]
+AGENTS = ["triage", "telios", "kinetics", "espida", "atlas", "gremlin"]
 ENDPOINT = re.compile(r"\b(GET|POST) (/[A-Za-z0-9_{}./-]+)")
 
 
@@ -56,3 +56,9 @@ def test_prompt_has_base_url_and_no_scenario_values(agent):
     assert re.search(r"\*\*Base URL:\*\* `https://[^`]+`", text), f"{agent}.md has no base URL line"
     leaked = sorted(v for v in scenario_values() if v in text)
     assert not leaked, f"{agent}.md gives away scenario values: {leaked}"
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_prompt_protocol_has_channel_and_rca(agent):
+    text = (PROMPTS / f"{agent}.md").read_text()
+    assert "channel=" in text and "[RCA]" in text
