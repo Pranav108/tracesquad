@@ -53,7 +53,7 @@ agents carry this:
    - For a backend fix, Atlas names the API call that proves it: the call that was failing, from Espida's evidence or Kinetics's network capture.
 4. **Kinetics verifies:**
    - **Frontend:** it runs the new build with the same mock user and the same steps (as now).
-   - **Backend:** it calls the API from `verify_with` on pre-prod as the mock user, and compares the response with the expectation.
+   - **Backend:** it calls the API Atlas named on pre-prod as the mock user, and checks that the response is now correct.
    - Telios adjusts the mock user's data if that's needed. Espida can confirm the result from the sandbox logs.
 5. **If verification fails,** Kinetics tells Atlas, which re-diagnoses and submits again, at most 2 attempts per bug. After that, it escalates to the owning team in the thread.
 6. **Once verification passes,** Atlas hands Gremlin the verified fix: the PR, the build or environment, the verification run or check id, the culprit change, and its root-cause note.
