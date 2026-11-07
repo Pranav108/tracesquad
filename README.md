@@ -27,6 +27,8 @@ TraceSquad gives each of those jobs to an AI agent. The six agents pick up a bug
 and work it in the bug's thread, asking each other directly for what they need. Each bug ends with
 exactly one closing message: an **RCA** for a fixed bug, or a **close** with an outcome (`duplicate`,
 `known_open`, `wont_fix`, `already_fixed`, `not_reproduced`, `escalated`).
+<img width="1752" height="897" alt="image" src="https://github.com/user-attachments/assets/73d5bfdd-0b37-4210-8144-22f38db80371" />
+
 
 What that gets you:
 
