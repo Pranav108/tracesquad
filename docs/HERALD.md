@@ -127,7 +127,7 @@ scripts/herald.sh status    # the bugs it is tracking
 | `work_log_channel` | required | Id, name or display name of the work log channel |
 | `triage` | `triage` | The agent reports go to, and the only one allowed to post `[PUBLIC]` |
 | `agents` | the six | Agent names: never treated as reporters, and their `@` is dropped in copied text |
-| `ignore_users` | `admin`, `switch-admin`, `system` | Accounts whose posts never open a bug or count as a reply |
+| `ignore_users` | `admin`, `switch-admin`, `system-bot`, `system` | Accounts whose posts never open a bug or count as a reply |
 | `report_id_pattern` | `\bRPT-\d+\b` | How a report id is found in a report. Without one the id is `FB-<post id>` |
 | `redact_patterns` | user ids, `preprod-…`, `<name>-service@<version>` | Removed from every `[PUBLIC]` before it's posted |
 | `poll_seconds` | `2` | How often both channels are read |

@@ -376,7 +376,7 @@ class Config:
     work_log_channel: str
     triage: str = "triage"
     agents: list[str] = field(default_factory=lambda: list(AGENTS))
-    ignore_users: list[str] = field(default_factory=lambda: ["admin", "switch-admin", "system"])
+    ignore_users: list[str] = field(default_factory=lambda: ["admin", "switch-admin", "system-bot", "system"])
     report_id_pattern: str = r"\bRPT-\d+\b"
     redact_patterns: list[str] = field(default_factory=lambda: list(DEFAULT_REDACT))
     poll_seconds: float = 2.0
