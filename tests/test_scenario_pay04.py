@@ -14,9 +14,9 @@ def test_pay04_known_bug_matches_user(client):
 
 def test_pay04_repro_matrix(setup_user, run):
     mu = setup_user(COHORT, PAY_CALLS)
-    assert run(mu, "android-18.3", "galaxy-m32", STEPS)["result"] == "reproduced"
-    assert run(mu, "android-18.4", "galaxy-m32", STEPS)["result"] == "not_reproduced"
-    assert run(mu, "android-18.3", "redmi-note-10", STEPS)["result"] == "not_reproduced"
+    assert run("RPT-104", mu, "android-18.3", "galaxy-m32", STEPS)["result"] == "reproduced"
+    assert run("RPT-104", mu, "android-18.4", "galaxy-m32", STEPS)["result"] == "not_reproduced"
+    assert run("RPT-104", mu, "android-18.3", "redmi-note-10", STEPS)["result"] == "not_reproduced"
 
 
 def test_pay04_fix_record(client):

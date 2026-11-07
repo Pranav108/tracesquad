@@ -2,7 +2,7 @@ from test_scenario_gold01 import GOLD, GOLD_CALLS
 
 RCA = {"bug_ref": "RPT-101", "title": "Gold status stale after renewal", "what_happened": "Renewed members saw Join Gold.",
        "root_cause": "Status cache was not cleared on renewal.", "culprit_change_id": "CHG-401",
-       "fix": {"pr_url": "https://git.example.invalid/membership-service/pull/7001", "preprod": {"service": "membership-service", "version": "3.12.0-atlas-1"}},
+       "fix": {"pr_url": "https://git.example.invalid/membership-service/pull/7001", "preprod": {"env": "preprod-atl-0001", "service": "membership-service", "version": "3.12.0-atlas-1"}},
        "verification": {"check_id": "CHK-0002"}, "impact": "1284 users", "follow_ups": ["Alert on stale status"]}
 
 
@@ -44,7 +44,7 @@ def test_reset_clears_fix_loop_state(client, setup_user):
     mu = setup_user(GOLD, GOLD_CALLS)
     client.post("/atlas/fixes", json={"bug_ref": "RPT-101", "layer": "backend", "target": "membership-service",
                                       "culprit_change_id": "CHG-401", "summary": "x"})
-    client.post("/api-checks", json={"env": "preprod", "mock_user_id": mu, "method": "GET", "endpoint": "/v2/membership/status"})
+    client.post("/api-checks", json={"bug_ref": "RPT-101", "env": "preprod", "mock_user_id": mu, "method": "GET", "endpoint": "/v2/membership/status"})
     client.post("/prds/PRD-GOLD-RENEW/updates", json={"change": "c", "reason": "r", "bug_ref": "RPT-101", "known_issue": "k"})
     client.post("/releases/hotfix-2026-11-06/notes", json={"bug_ref": "RPT-101", "note": "n"})
     client.post("/threads/THR-101/replies", json={"bug_ref": "RPT-101", "text": "t"})
@@ -57,5 +57,5 @@ def test_reset_clears_fix_loop_state(client, setup_user):
     mu = setup_user(GOLD, GOLD_CALLS)
     attempt = client.post("/atlas/fixes", json={"bug_ref": "RPT-101", "layer": "backend", "target": "membership-service",
                                                 "culprit_change_id": "CHG-401", "summary": "x"}).json()
-    chk = client.post("/api-checks", json={"env": "preprod", "mock_user_id": mu, "method": "GET", "endpoint": "/v2/membership/status"}).json()
+    chk = client.post("/api-checks", json={"bug_ref": "RPT-101", "env": "preprod", "mock_user_id": mu, "method": "GET", "endpoint": "/v2/membership/status"}).json()
     assert attempt["attempt_id"] == "ATL-0001" and chk["check_id"] == "CHK-0001"

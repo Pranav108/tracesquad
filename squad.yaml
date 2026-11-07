@@ -1,0 +1,269 @@
+# TraceSquad as one machine-readable file: who the agents are, what each owns, who asks whom, which
+# API endpoints each one calls, how the mock data works, how the API is found, and how to deploy it.
+#
+# - scripts/make_switch_template.py builds switch/tracesquad.template.yaml from this file and prompts/.
+# - tests/test_squad.py keeps it true: every agent has a prompt, `api:` is exactly the endpoints its
+#   prompt names (all served by the API), and every `asks:` edge points at a real agent.
+# - AGENTS.md says how to set the squad up on any platform; SWITCH.md is the Switch deploy guide;
+#   docs/SYSTEM.md explains it all in depth.
+
+name: TraceSquad
+summary: >-
+  Six AI agents pick up app bug reports in a chat room. They work out whether a bug is known, who was
+  hit and whether the backend, the frontend or both are at fault; reproduce it with a mock copy of the
+  user; fix it; verify the fix on every affected platform; and close the loop with an RCA. Everything
+  they touch is mock data served by the TraceSquad API in this repo.
+
+repository: https://github.com/Pranav108/tracesquad
+docs:
+  overview: README.md
+  for_ai_agents: AGENTS.md                # how to set the squad up on any platform
+  deploy_on_switch: SWITCH.md
+  system: docs/SYSTEM.md
+  api: docs/API.md
+
+# How the squad is wired. There is no coordinator and no fixed pipeline.
+topology:
+  style: peer-to-peer
+  rule: Each agent owns one area and answers only from it. Any agent may ask any other, in the bug's thread.
+  shared_record: The bug's thread in the squad's room. Every question, answer and result is posted there.
+  wake_rule: >-
+    An agent wakes only when a message targets it. In Switch that is send_targeted_message with
+    target_names set to the agents in the message's to=, in the bug's thread_id. A to= alone wakes nobody.
+  owner_of_every_bug: triage
+  talks_to_reporter: triage
+  closes_fixed_bugs: gremlin (its [RCA], sent to triage)
+  closes_other_bugs: triage (its [CLOSE] outcome=duplicate|known_open|wont_fix|already_fixed|not_reproduced|escalated)
+  watchdog: >-
+    Triage nudges any message unanswered for 10 minutes. Switch has no timer, so someone outside the
+    squad (the operator, a scheduled post or a cron job) sends triage the word "sweep" about every 10 minutes.
+
+agents:
+  - name: triage
+    display_name: Triage
+    description: "Front door: duplicates, the real user, first classification"
+    prompt: prompts/triage.md
+    job: Owns every bug from report to close, keeps it moving, and closes every bug that isn't fixed.
+    owns: [the bug and its thread, the reporter, duplicate checks, the real user's profile, journey and cohort, the first classification]
+    never: [reproduce, read logs in depth, fix]
+    asks:
+      telios: Set up a bug (a mock user like the reporter, and the matching app build)
+      kinetics: Reproduce a bug, or re-run it on another build
+      espida: What the backend did for a user around a time; how many users hit it
+      atlas: Fix a confirmed bug (Triage hands it over)
+      gremlin: Intended behaviour and release questions
+    api:
+      - GET /reports/{report_id}
+      - GET /known-bugs
+      - GET /known-bugs/{bug_id}
+      - GET /users/{user_id}
+      - GET /users/{user_id}/journey
+      - GET /cohorts/{cohort_id}
+      - GET /devices
+      - GET /teams
+      - GET /fixes
+      - GET /budget/{bug_ref}
+
+  - name: telios
+    display_name: Telios
+    description: Builds mock users and fetches app builds in the sandbox
+    prompt: prompts/telios.md
+    job: Prepares reproductions. Picks the app build and builds a mock user whose sandbox data matches the real user, by calling setup APIs in the right order.
+    owns: [mock users and their sandbox data, twins on the other platform, login credentials, app builds]
+    never: [reproduce or test anything, touch real users]
+    asks:
+      triage: Missing user details (which coupon, restaurant, plan or items); reports when stuck
+      espida: Details only the logs have (which order or restaurant the backend served)
+      kinetics: Tells it a setup is ready
+    api:
+      - GET /users/{user_id}
+      - GET /users/{user_id}/journey
+      - GET /cohorts/{cohort_id}
+      - GET /builds
+      - GET /builds/{build_id}
+      - GET /setup-apis
+      - POST /sandbox/users
+      - POST /sandbox/users/{mock_user_id}/setup/{api_name}
+      - GET /sandbox/users/{mock_user_id}
+      - GET /sandbox/services
+      - GET /budget/{bug_ref}
+
+  - name: kinetics
+    display_name: Kinetics
+    description: Reproduces bugs in the app and verifies fixes
+    prompt: prompts/kinetics.md
+    job: Drives the app. Reproduces bugs, takes baselines on the next release candidate, and verifies fixes on every affected platform (app runs, and API calls in a backend fix's own pre-prod env).
+    owns: [repro runs, baselines, fix verification]
+    never: [create data (it asks Telios), fix code]
+    asks:
+      triage: The real user's device, exact steps and the time of the error; reports when stuck or it can't reproduce
+      telios: A build and a mock user for a bug; extra state when a setup looks incomplete
+      espida: What the backend did on a call a run failed on
+      atlas: Verification results for its fixes
+    api:
+      - GET /users/{user_id}
+      - GET /users/{user_id}/journey
+      - GET /builds
+      - GET /builds/{build_id}
+      - GET /sandbox/users/{mock_user_id}
+      - GET /devices
+      - POST /repro/runs
+      - POST /api-checks
+      - GET /fixes
+      - GET /fixes/{fix_id}
+      - GET /budget/{bug_ref}
+
+  - name: espida
+    display_name: Espida
+    description: Reads logs, traces, deploys and impact
+    prompt: prompts/espida.md
+    job: Reads the system's logs. Says which layer is at fault and how many users, app versions and platforms are hit.
+    owns: [backend and client logs (prod and sandbox), traces, deploys, error impact]
+    never: [change anything, post personal data]
+    asks:
+      triage: The exact user and the time window of the error
+      telios: Which mock users a sandbox run used
+      kinetics: A reproduction, when logs alone can't settle it
+    api:
+      - GET /users/{user_id}
+      - GET /users/{user_id}/journey
+      - GET /logs
+      - GET /traces/{trace_id}
+      - GET /deploys
+      - GET /impact/{error_signature}
+      - GET /sandbox/services
+      - GET /teams
+      - GET /budget/{bug_ref}
+
+  - name: atlas
+    display_name: Atlas
+    description: Finds the culprit change and ships the fix
+    prompt: prompts/atlas.md
+    job: Owns the fix. Finds the culprit change and shows it fits the evidence, scopes every affected platform, opens the PR, and ships builds on the next release candidate (frontend) or a deploy to its own pre-prod env (backend).
+    owns: [the culprit, the PR, fix builds, backend fix envs]
+    never: [merge PRs, touch prod, claim a fix works before it's verified, fix only the reporter's platform]
+    asks:
+      triage: Facts about the real user; reports when stuck or it must escalate
+      telios: Different mock-user data when verification needs it
+      kinetics: Verify a fix (after a baseline), in the app or with an API call in the fix's env
+      espida: Which call failed and why; confirming a backend fix from sandbox logs
+      gremlin: The intended behaviour (the PRD); hands it the verified fix
+    api:
+      - GET /reports/{report_id}
+      - GET /users/{user_id}
+      - GET /traces/{trace_id}
+      - GET /impact/{error_signature}
+      - GET /builds
+      - GET /builds/{build_id}
+      - GET /sandbox/services
+      - POST /api-checks
+      - GET /changes
+      - POST /atlas/fixes
+      - GET /teams
+      - GET /fixes
+      - GET /fixes/{fix_id}
+      - GET /budget/{bug_ref}
+
+  - name: gremlin
+    display_name: Gremlin
+    description: "Product and program manager: PRDs, releases, threads, final RCA"
+    prompt: prompts/gremlin.md
+    job: Closes the loop on a fixed bug. Checks the culprit and the platform coverage, updates PRDs and release notes, tells teams and related threads, and posts the [RCA] that closes the bug.
+    owns: [PRDs, the release calendar, related threads, informing teams, the final RCA]
+    never: [investigate, fix, verify]
+    asks:
+      triage: The reporter's situation; receives the [RCA] that closes a fixed bug
+      kinetics: The run or check that verified the fix
+      espida: How many users were hit, on which app versions, since when
+      atlas: The PR, the builds or env, the culprit and the root cause
+    api:
+      - GET /impact/{error_signature}
+      - GET /changes
+      - GET /prds
+      - GET /prds/{prd_id}
+      - GET /releases
+      - GET /threads
+      - GET /threads/{thread_id}
+      - POST /prds/{prd_id}/updates
+      - POST /releases/{release_id}/notes
+      - POST /threads/{thread_id}/replies
+      - POST /rca
+      - GET /rca/{bug_ref}
+      - GET /teams
+      - GET /fixes
+      - GET /budget/{bug_ref}
+
+# People in the room. Agents never act for them.
+people:
+  reporter: Posts the bug with a user id. Only Triage talks to them.
+  fe_be_teams: Review and merge Atlas's PRs, own their features, and take over escalated bugs.
+  operator: Runs the API (scripts/serve.sh), sends triage "sweep" about every 10 minutes, resets between demos.
+
+# The message protocol every agent uses in a bug's thread. Full detail: docs/SYSTEM.md section 4.
+protocol:
+  header: "[TYPE] bug=<report id> from=<agent> to=<agent> chain=<a→b> channel=<channel>"
+  messages:
+    ASK: Anyone, to the owner of some information (question, why)
+    ANSWER: Back to the asker, with evidence and confidence
+    NOT MINE: Back to the asker, naming who owns it (try=)
+    CLAIM: I'm starting on this (doing, eta= when over 10 minutes)
+    REPORT: A result for the agent who acts next, or I'm stuck to Triage (summary, evidence, next)
+    NUDGE: Triage only, about a message nobody answered
+    CLOSE: Triage only, closes a bug that didn't end in a fix (outcome=)
+    RCA: Gremlin only, sent to Triage; closes a fixed bug
+  rules:
+    - Read the thread before asking.
+    - Ask the owner; answer only from your own area.
+    - Never go quiet; every turn ends with an answer, a hand-off, or a [REPORT] to Triage.
+    - Carry the chain; stop after 3 hops with "unknown".
+    - Cite evidence (the API call, log, trace, run or check id).
+  budgets_enforced_by_api: {fix_attempts: 2, app_runs_per_platform: 7, api_checks: 4, over_limit: HTTP 429}
+
+# The mock world the agents work against.
+api:
+  what: A FastAPI app (tracesquad/api.py) that serves hand-written JSON from data/, plus a small in-memory sandbox.
+  run: scripts/serve.sh                      # local; --tunnel adds a public URL; --publish shares it
+  health: 'GET /health answers {"service": "tracesquad-api", "status": "ok"}'
+  docs_while_running: /docs and /openapi.json on the API's address
+  # Agents never hold a URL. They call `tsq`, which looks the address up on every call.
+  client:
+    source: bin/tsq
+    installed_at: ~/.tracesquad/bin/tsq      # scripts/serve.sh installs it on its own machine
+    usage: "tsq GET /users/U-12345 | tsq POST /sandbox/users '{\"cohort_id\": \"...\"}'"
+    finds_the_api_in:                        # in order; the first that answers GET /health wins
+      - env TRACESQUAD_API_URL
+      - file ~/.tracesquad/api-url           # written by scripts/serve.sh on every start
+      - a discovery URL, from env TRACESQUAD_DISCOVERY_URL or file ~/.tracesquad/discovery-url (a URL whose body is the API's URL)
+      - http://127.0.0.1:8095
+    other_machines: >-
+      Agents on a machine that doesn't run the API need tsq there plus a way to find the API:
+      run `scripts/serve.sh --publish` on the API's machine (it pushes the public URL to this repo's
+      `endpoint` branch), then `scripts/install-client.sh --discovery <raw URL of endpoint/api-url>` on
+      the agents' machine. See SWITCH.md.
+  errors: '{"detail": "..."}; 404 unknown id, 409 setup prerequisite missing, 422 bad params, 429 budget used up'
+  hidden_from_agents:
+    - /admin/* (each scenario's expected answer)
+    - POST /sandbox/reset, POST /sandbox/deploy, POST /fixes/{fix_id}/publish (operator only)
+    - Whether an Atlas fix is right (only a repro run or an API check shows it)
+
+mock_data:
+  files: [data/shared.json, data/scenarios/*.json]
+  state: In memory. Mock users, sandbox logs, Atlas's builds and envs, API checks, budgets and Gremlin's writes reset on restart or POST /sandbox/reset.
+  scenarios:
+    - {id: GOLD-01, report: RPT-101, bug: Gold benefits missing after renewal}
+    - {id: CART-02, report: RPT-102, bug: '"Something went wrong" at checkout after a coupon'}
+    - {id: MENU-03, report: RPT-103, bug: Restaurant name overlaps the rating badge}
+    - {id: PAY-04, report: RPT-104, bug: UPI payment stuck on "Processing"}
+    - {id: TRACK-05, report: RPT-105, bug: Order tracking screen blank after a backend change}
+  add_a_scenario: README.md, "Adding a scenario"
+
+deploy:
+  switch_template: switch/tracesquad.template.yaml   # version 2: creates the six agents and the room
+  room: tracesquad
+  agent_names_are_fixed: true   # prompts address each other by these names; they must be free on the server
+  agents_get_this_repo: false   # never: data/ holds every scenario's answers
+  needs_on_the_agents_machine: ~/.tracesquad/bin/tsq, and the API reachable (scripts/serve.sh)
+  after_prompt_changes: uv run python scripts/make_switch_template.py
+  other_platforms:                          # see AGENTS.md
+    claude_code: uv run python scripts/export_agents.py claude-code <project dir outside this repo>
+    any_sdk: uv run python scripts/export_agents.py json squad.json

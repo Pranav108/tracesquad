@@ -8,17 +8,20 @@
       "duplicate_of": null,
       "fix_id": "FIX-GOLD-01",
       "expected_path": [
-        "Triage: no duplicate (BUG-1180 is an iOS badge bug); reads user U-48213 and journey; classifies backend",
-        "Espida: renewal.success then stale status from cache; DEP-201 membership-service 3.12.0; impact 1284 users; reports to membership-be",
-        "membership-be fixes; POST /sandbox/deploy membership-service 3.12.1",
-        "Telios: create_user android-18.5-DEL-G7-gold_annual -> set_address DEL -> set_group G7 -> activate_plan gold_annual -> renew_plan gold_annual",
-        "Kinetics: android-18.5 on pixel-7, home/open -> not_reproduced (fix passes)",
-        "Espida: sandbox logs show status active"
+        "Triage: no duplicate (BUG-1180 is an iOS badge bug); reads user U-48213 and journey; classifies backend; asks Espida",
+        "Espida: renewal.success then stale status from cache; DEP-201 membership-service 3.12.0; impact 1284 users; reports to Atlas",
+        "Atlas asks Telios for a mock user: create_user android-18.5-DEL-G7-gold_annual -> set_address DEL -> set_group G7 -> activate_plan gold_annual -> renew_plan gold_annual",
+        "Kinetics baseline: API check GET /v2/membership/status on preprod -> expired",
+        "Atlas: culprit CHG-401 (deployed as DEP-201 just before first_seen); POST /atlas/fixes backend membership-service -> env preprod-atl-0001 with 3.12.0-atlas-1",
+        "Kinetics, in env preprod-atl-0001: API check -> active; android-18.5 on pixel-7, home/open -> not_reproduced, Gold badge (verified); Espida: sandbox logs with that preprod_env show status active",
+        "Gremlin: PRD-GOLD-RENEW, hotfix-2026-11-06 note, reply in #gold-support, inform membership-be, RCA to Triage; Triage tells the reporter"
       ],
       "unexpected_paths": [
         "Kinetics reproduces before the fix -> reproduced",
-        "Telios skips renew_plan -> not_reproduced; journey shows gold/tap_renew",
-        "Asking about BUG-1180's area -> nothing in this user's logs"
+        "Telios skips renew_plan -> not_reproduced, observed: an annual plan that has never been renewed; journey shows gold/tap_renew",
+        "Kinetics checks the fix on shared preprod instead of the attempt's env -> still expired (says nothing about the fix)",
+        "Asking about BUG-1180's area -> nothing in this user's logs",
+        "Atlas names CHG-402 or CHG-403 as the culprit -> status still expired (verification fails)"
       ]
     }
   ],
@@ -78,7 +81,7 @@
     {"deploy_id": "DEP-202", "service": "search-service", "version": "11.4.0", "deployed_at": "2026-11-03T12:00:00+05:30", "change": "Ranking tweak for late-night search"}
   ],
   "impacts": [
-    {"error_signature": "membership.stale_status_after_renewal", "first_seen": "2026-11-02T16:20:00+05:30", "affected_users": 1284, "by_app_version": {"18.4": 402, "18.5": 882}, "note": "Only users who renewed after 2026-11-02 16:00"}
+    {"error_signature": "membership.stale_status_after_renewal", "first_seen": "2026-11-02T16:20:00+05:30", "affected_users": 1284, "by_app_version": {"18.4": 402, "18.5": 882}, "by_platform": {"android": 904, "ios": 380}, "note": "Only users who renewed after 2026-11-02 16:00"}
   ],
   "known_bugs": [
     {"bug_id": "BUG-1180", "title": "Gold badge missing on iOS profile screen", "status": "fixed", "layer": "frontend", "affected_platforms": ["ios"], "affected_versions": ["18.3"], "affected_os": null, "fixed_in": "18.4", "thread_url": "https://chat.example.invalid/app-bugs/p/1180", "summary": "Profile header did not render the Gold badge on iOS 18.3 because of a missing asset.", "error_signature": null}
@@ -93,14 +96,17 @@
       "devices": null,
       "backend": {"service": "membership-service", "versions": ["3.12.0"]},
       "observed": "Home shows the 'Join Gold' banner; cart shows ₹40 delivery fee",
+      "observed_ok": "Home shows the Gold member badge; cart shows free delivery",
+      "missing_state": {"plan:gold_annual": "Home shows the 'Join Gold' banner, and Profile > Membership shows no Gold annual plan at all, so the banner is expected", "gold_renewed": "Home shows the Gold member badge; Profile > Membership shows an annual plan that has never been renewed"},
       "artifacts": {"video_url": "https://artifacts.example.invalid/gold01-home.mp4", "screenshot_url": "https://artifacts.example.invalid/gold01-home.png"},
       "network": [{"method": "GET", "endpoint": "/v2/membership/status", "status": 200, "response": {"status": "expired", "cache_hit": true}}],
+      "network_ok": [{"method": "GET", "endpoint": "/v2/membership/status", "status": 200, "response": {"status": "active", "cache_hit": false}}],
       "sandbox_logs": [{"source": "backend", "service": "membership-service", "endpoint": "/v2/membership/status", "method": "GET", "status": 200, "level": "warn", "message": "served from cache", "error_signature": "membership.stale_status_after_renewal", "response_excerpt": {"status": "expired", "cache_hit": true}}],
       "sandbox_logs_ok": [{"source": "backend", "service": "membership-service", "endpoint": "/v2/membership/status", "method": "GET", "status": 200, "level": "info", "message": "status computed", "response_excerpt": {"status": "active", "cache_hit": false}}]
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-GOLD-01", "bug_ref": "RPT-101", "team_id": "membership-be", "layer": "backend", "title": "Invalidate status cache synchronously on membership.renewed", "pr_url": "https://git.example.invalid/membership-service/pull/4412", "ships_in": "membership-service@3.12.1", "target": "membership-service"}
+    {"fix_id": "FIX-GOLD-01", "bug_ref": "RPT-101", "team_id": "membership-be", "layer": "backend", "title": "Invalidate status cache synchronously on membership.renewed", "pr_url": "https://git.example.invalid/membership-service/pull/4412", "ships_in": "membership-service@3.12.1", "target": "membership-service", "culprit_change_id": "CHG-401"}
   ],
   "changes": [
     {"change_id": "CHG-401", "repo": "membership-service", "area": "membership-service", "platforms": null, "title": "Status cache TTL 5m -> 24h; invalidation via async job", "summary": "Caches membership status for 24h to cut DB reads. Cache invalidation moved to the nightly async job.", "pr_url": "https://git.example.invalid/membership-service/pull/4380", "team_id": "membership-be", "merged_at": "2026-11-02T13:10:00+05:30", "released_in": "membership-service@3.12.0"},

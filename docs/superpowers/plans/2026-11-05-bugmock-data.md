@@ -384,7 +384,7 @@ Each scenario lists the exact values its JSON file must contain. The implementer
 
 ## Tasks
 
-Run all commands from `the repository root`.
+Run all commands from the repository root.
 
 ### Task 1: Project skeleton, models, loader, shared data
 

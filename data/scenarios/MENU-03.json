@@ -8,13 +8,15 @@
       "duplicate_of": null,
       "fix_id": "FIX-MENU-03",
       "expected_path": [
-        "Triage: no duplicate; classifies ui",
+        "Triage: no duplicate; classifies ui; asks Telios and Kinetics",
         "Telios: gets ios-18.5 (s3, ready now); create_user ios-18.5-BLR-G1-none -> set_address BLR -> set_group G1",
-        "Kinetics: ios-18.5 on iphone-se-2, restaurant/open R-5520 -> reproduced; reports to discovery-fe",
-        "After the fix: ios-18.6-rc1 -> not_reproduced (fix passes)"
+        "Kinetics: ios-18.5 on iphone-se-2, restaurant/open R-5520 -> reproduced; reports to Atlas",
+        "Atlas: culprit CHG-421 (iOS 18.4 header; CHG-422 is search spacing); scope ios only; Kinetics baseline ios-18.6-rc1 on iphone-se-2 -> reproduced",
+        "Atlas: POST /atlas/fixes frontend restaurant, platforms [ios], culprit CHG-421 -> ios-18.6-rc1-atlas-1; Kinetics on iphone-se-2 -> not_reproduced (verified)",
+        "Gremlin: PRD-RESTO-HEADER, app-18.6 note, reply in #design-reviews, inform discovery-fe, RCA to Triage; Triage tells the reporter"
       ],
       "unexpected_paths": [
-        "Kinetics uses iphone-15 -> not_reproduced; must ask Triage for the device (profile says iphone-se-2)",
+        "Kinetics uses iphone-15 -> not_reproduced, observed: the name wraps onto two lines, badge clear; must ask Triage for the device (profile says iphone-se-2)",
         "Kinetics opens R-2210 -> not_reproduced (short name)",
         "Espida checks logs -> only 200s"
       ]
@@ -75,10 +77,12 @@
       "scenario_id": "MENU-03",
       "trigger": {"screen": "restaurant", "action": "open", "params": {"restaurant_id": "R-5520"}},
       "requires_tags": [],
-      "affected_builds": ["ios-18.4", "ios-18.5"],
+      "affected_builds": ["ios-18.4", "ios-18.5", "ios-18.6-rc1"],
       "devices": ["iphone-se-2"],
       "backend": null,
       "observed": "Restaurant name wraps onto three lines and overlaps the 4.1★ rating badge",
+      "observed_ok": "Restaurant name wraps onto two lines; the 4.1★ rating badge sits clear below it",
+      "missing_state": {},
       "artifacts": {"video_url": "https://artifacts.example.invalid/menu03-restaurant.mp4", "screenshot_url": "https://artifacts.example.invalid/menu03-restaurant.png"},
       "network": [{"method": "GET", "endpoint": "/restaurants/R-5520", "status": 200, "response": {"name_length": 52, "rating": 4.1}}],
       "sandbox_logs": [],
@@ -86,7 +90,7 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-MENU-03", "bug_ref": "RPT-103", "team_id": "discovery-fe", "layer": "frontend", "title": "Clamp restaurant name to two lines and move the rating badge below it on small screens", "pr_url": "https://git.example.invalid/consumer-app/pull/9934", "ships_in": "ios-18.6-rc1", "target": "restaurant", "platforms": ["ios"]}
+    {"fix_id": "FIX-MENU-03", "bug_ref": "RPT-103", "team_id": "discovery-fe", "layer": "frontend", "title": "Clamp restaurant name to two lines and move the rating badge below it on small screens", "pr_url": "https://git.example.invalid/consumer-app/pull/9934", "ships_in": "ios-18.6-rc1", "target": "restaurant", "platforms": ["ios"], "culprit_change_id": "CHG-421"}
   ],
   "changes": [
     {"change_id": "CHG-421", "repo": "consumer-app", "area": "restaurant", "platforms": ["ios"], "title": "Restaurant header: name and rating on one row", "summary": "Puts the restaurant name and rating badge on a single row to save vertical space.", "pr_url": "https://git.example.invalid/consumer-app/pull/8655", "team_id": "discovery-fe", "merged_at": "2026-09-20T15:00:00+05:30", "released_in": "18.4"},

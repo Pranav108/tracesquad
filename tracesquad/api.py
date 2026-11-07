@@ -8,13 +8,13 @@ from fastapi import APIRouter, Body, FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from bugmock.atlas import FixRequest, submit_fix
-from bugmock.checks import CheckRequest, run_api_check
-from bugmock.errors import ApiError
-from bugmock.models import LogEntry
-from bugmock.repro import ReproRequest, run_repro
-from bugmock.sandbox import Sandbox
-from bugmock.store import DATA_DIR, DataError, Store, load_dataset, parse_cohort_id
+from tracesquad.atlas import FixRequest, submit_fix
+from tracesquad.checks import CheckRequest, run_api_check
+from tracesquad.errors import ApiError
+from tracesquad.models import LogEntry
+from tracesquad.repro import ReproRequest, run_repro
+from tracesquad.sandbox import Sandbox
+from tracesquad.store import DATA_DIR, DataError, Store, load_dataset, parse_cohort_id
 
 
 def _store(request: Request) -> Store:
@@ -176,7 +176,7 @@ def _published(request: Request) -> set[str]:
     return request.app.state.sandbox.published_fixes
 
 
-_HIDDEN_FIX_FIELDS = {"published", "target", "platforms"}
+_HIDDEN_FIX_FIELDS = {"published", "target", "platforms", "culprit_change_id"}
 
 
 @teams.get("/fixes", summary="Atlas fix attempts and already-published fixes, optionally for one bug (known bug id or report id)")
@@ -242,19 +242,24 @@ def get_mock_user(mock_user_id: str, request: Request) -> dict[str, Any]:
 
 
 @sandbox_routes.post(
-    "/deploy", summary="Operator: deploy a service version to the sandbox", include_in_schema=False
+    "/deploy", summary="Operator: deploy a service version to shared pre-prod", include_in_schema=False
 )
 def deploy(body: DeployRequest, request: Request) -> dict[str, str]:
     return _sandbox(request).deploy(body.service, body.version)
 
 
-@sandbox_routes.get("/services", summary="Service versions currently running in the sandbox")
-def get_services(request: Request) -> dict[str, str]:
-    return dict(_sandbox(request).services)
+@sandbox_routes.get(
+    "/services",
+    summary="Service versions in pre-prod: shared (env=preprod, the default) or one backend fix attempt's env",
+)
+def get_services(request: Request, env: str = "preprod") -> dict[str, str]:
+    return _sandbox(request).services_in(env)
 
 
 @sandbox_routes.post(
-    "/reset", summary="Admin: clear mock users, sandbox logs and service versions", include_in_schema=False
+    "/reset",
+    summary="Admin: clear mock users, sandbox logs, service versions, pre-prod envs and budgets",
+    include_in_schema=False,
 )
 def reset_sandbox(request: Request) -> dict[str, bool]:
     _sandbox(request).reset()
@@ -278,7 +283,7 @@ def list_changes(
     return [c.model_dump(mode="json") for c in sorted(changes, key=lambda c: c.merged_at, reverse=True)]
 
 
-@atlas_routes.post("/atlas/fixes", summary="Submit a fix: opens a PR and returns a new build (frontend) or a pre-prod deploy (backend)")
+@atlas_routes.post("/atlas/fixes", summary="Submit a fix: opens a PR and returns new builds on the next release candidate, one per platform (frontend), or a deploy to its own pre-prod env (backend). At most 2 per bug")
 def post_atlas_fix(body: FixRequest, request: Request) -> dict[str, Any]:
     return submit_fix(body, _store(request), _sandbox(request))
 
@@ -412,14 +417,23 @@ def list_devices(request: Request) -> list[dict[str, Any]]:
     return [d.model_dump(mode="json") for d in _store(request).devices.values()]
 
 
-@kinetics.post("/repro/runs", summary="Install a build on a device, log in as a mock user, follow the steps")
+@kinetics.post("/repro/runs", summary="For one bug: install a build on a device, log in as a mock user, follow the steps")
 def post_repro_run(body: ReproRequest, request: Request) -> dict[str, Any]:
     return run_repro(body, _store(request), _sandbox(request)).model_dump()
 
 
-@kinetics.post("/api-checks", summary="Call a backend endpoint on pre-prod as a mock user (to verify a backend fix)")
+@kinetics.post("/api-checks", summary="For one bug: call a backend endpoint on a pre-prod env as a mock user (to verify a backend fix)")
 def post_api_check(body: CheckRequest, request: Request) -> dict[str, Any]:
     return run_api_check(body, _store(request), _sandbox(request))
+
+
+budget = APIRouter(tags=["Everyone: per-bug budgets"])
+
+
+@budget.get("/budget/{bug_ref}", summary="What one bug has used of its budget: fix attempts, app runs per platform, API checks")
+def get_budget(bug_ref: str, request: Request) -> dict[str, Any]:
+    _get(_store(request).reports, bug_ref, "report")
+    return _sandbox(request).budget(bug_ref)
 
 
 @admin.get("/scenarios", summary="All scenarios with expected class and path")
@@ -446,10 +460,13 @@ def get_scenario(scenario_id: str, request: Request) -> dict[str, Any]:
     }
 
 
+SERVICE = "tracesquad-api"
+
+
 def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
     app = FastAPI(
-        title="Bugmock",
-        description="Mock data for the Triage, Telios, Kinetics and Espida bug agents.",
+        title="TraceSquad API",
+        description="Mock world for the TraceSquad bug agents: Triage, Telios, Kinetics, Espida, Atlas and Gremlin.",
         version="0.1.0",
     )
     app.state.store = Store(load_dataset(data_dir))
@@ -459,7 +476,12 @@ def create_app(data_dir: Path = DATA_DIR) -> FastAPI:
     async def handle_api_error(_: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
-    for router in (triage, espida, telios, sandbox_routes, kinetics, atlas_routes, gremlin, teams, admin):
+    # The client (bin/tsq) probes this to tell the TraceSquad API apart from whatever else answers on a URL.
+    @app.get("/health", summary="Liveness: which service this is", tags=["Everyone: health"])
+    def health() -> dict[str, str]:
+        return {"service": SERVICE, "status": "ok"}
+
+    for router in (triage, espida, telios, sandbox_routes, kinetics, atlas_routes, gremlin, teams, budget, admin):
         app.include_router(router)
     return app
 

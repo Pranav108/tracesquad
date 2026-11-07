@@ -9,16 +9,19 @@
       "fix_id": "FIX-TRACK-05",
       "expected_path": [
         "Triage: no duplicate (BUG-1190 is the map); unclear class; asks Espida",
-        "Espida: backend 200 with schema v2, client TypeError app.tracking.eta_type_error, DEP-205, impact only on 18.2-18.3 -> both: backend broke the contract for old clients",
-        "logistics-be fixes (orders-fe informed); POST /sandbox/deploy order-tracking-service 5.3.1",
+        "Espida: backend 200 with schema v2, client TypeError app.tracking.eta_type_error, DEP-205, impact only on 18.2-18.3 -> both: backend broke the contract for old clients; reports to Atlas",
         "Telios: create_user android-18.3-HYD-G4-gold_trial -> set_address HYD -> set_group G4 -> activate_plan gold_trial -> add_payment_method upi -> place_order R-7781",
-        "Kinetics: android-18.3, order_tracking/open -> not_reproduced (fix passes)",
-        "Espida: sandbox logs show schema_version 1"
+        "Kinetics: android-18.3 order_tracking/open -> reproduced; android-18.6-rc1 -> not_reproduced (new apps cope; old apps can't be patched -> the fix must be backend)",
+        "Kinetics baseline: API check GET /orders/active/track on preprod -> schema_version 2",
+        "Atlas: culprit CHG-431 (deployed as DEP-205 just before first_seen); POST /atlas/fixes backend order-tracking-service -> env preprod-atl-0001 with 5.3.0-atlas-1",
+        "Kinetics, in env preprod-atl-0001: API check -> schema_version 1; android-18.3 order_tracking/open -> not_reproduced (verified); Espida: sandbox logs with that preprod_env show schema_version 1",
+        "Gremlin: PRD-TRACK-ETA, hotfix note, replies in #logistics-oncall and #app-release, informs logistics-be and orders-fe, RCA to Triage; Triage tells the reporter"
       ],
       "unexpected_paths": [
         "Before the fix, android-18.4 -> not_reproduced (clue: newer apps cope)",
-        "Telios skips place_order -> not_reproduced",
-        "place_order before add_payment_method -> 409"
+        "Telios skips place_order -> not_reproduced, observed: 'No active orders'",
+        "place_order before add_payment_method -> 409",
+        "Atlas ships an app fix -> no baseline on android-18.6-rc1 (the bug never shows there), so Kinetics answers inconclusive"
       ]
     }
   ],
@@ -75,7 +78,7 @@
     {"deploy_id": "DEP-205", "service": "order-tracking-service", "version": "5.3.0", "deployed_at": "2026-11-04T11:30:00+05:30", "change": "ETA returned as a range {min, max} (schema v2) for all clients"}
   ],
   "impacts": [
-    {"error_signature": "app.tracking.eta_type_error", "first_seen": "2026-11-04T11:34:00+05:30", "affected_users": 9870, "by_app_version": {"18.2": 3100, "18.3": 6770}, "note": "No occurrences on 18.4+"}
+    {"error_signature": "app.tracking.eta_type_error", "first_seen": "2026-11-04T11:34:00+05:30", "affected_users": 9870, "by_app_version": {"18.2": 3100, "18.3": 6770}, "by_platform": {"android": 9870}, "note": "No occurrences on 18.4+"}
   ],
   "known_bugs": [
     {"bug_id": "BUG-1190", "title": "Tracking map not loading on slow networks", "status": "open", "layer": "frontend", "affected_platforms": ["android"], "affected_versions": ["18.4", "18.5"], "affected_os": null, "fixed_in": null, "thread_url": "https://chat.example.invalid/app-bugs/p/1190", "summary": "Map tiles time out on 2G/3G; ETA and status still render.", "error_signature": null}
@@ -90,8 +93,11 @@
       "devices": null,
       "backend": {"service": "order-tracking-service", "versions": ["5.3.0"]},
       "observed": "Tracking screen renders blank white; no ETA, no map",
+      "observed_ok": "Tracking shows the ETA and the rider map; status 'Preparing'",
+      "missing_state": {"order:active": "Order tracking shows 'No active orders'"},
       "artifacts": {"video_url": "https://artifacts.example.invalid/track05-blank.mp4", "screenshot_url": "https://artifacts.example.invalid/track05-blank.png"},
       "network": [{"method": "GET", "endpoint": "/orders/{order_id}/track", "status": 200, "response": {"schema_version": 2, "eta": {"min": 25, "max": 35}, "status": "preparing"}}],
+      "network_ok": [{"method": "GET", "endpoint": "/orders/{order_id}/track", "status": 200, "response": {"schema_version": 1, "eta": 30, "status": "preparing"}}],
       "sandbox_logs": [
         {"source": "backend", "service": "order-tracking-service", "endpoint": "/orders/{order_id}/track", "method": "GET", "status": 200, "level": "info", "message": "tracking served", "response_excerpt": {"schema_version": 2, "eta": {"min": 25, "max": 35}, "status": "preparing"}},
         {"source": "client", "service": "android-app", "level": "error", "message": "TypeError: eta.toFixed is not a function at TrackingHeader", "error_signature": "app.tracking.eta_type_error"}
@@ -102,7 +108,7 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-TRACK-05", "bug_ref": "RPT-105", "team_id": "logistics-be", "layer": "backend", "title": "Serve tracking schema v1 to app versions below 18.4", "pr_url": "https://git.example.invalid/order-tracking-service/pull/731", "ships_in": "order-tracking-service@5.3.1", "target": "order-tracking-service"}
+    {"fix_id": "FIX-TRACK-05", "bug_ref": "RPT-105", "team_id": "logistics-be", "layer": "backend", "title": "Serve tracking schema v1 to app versions below 18.4", "pr_url": "https://git.example.invalid/order-tracking-service/pull/731", "ships_in": "order-tracking-service@5.3.1", "target": "order-tracking-service", "culprit_change_id": "CHG-431"}
   ],
   "changes": [
     {"change_id": "CHG-431", "repo": "order-tracking-service", "area": "order-tracking-service", "platforms": null, "title": "ETA returned as {min, max} (schema v2) for all clients", "summary": "Tracking returns an ETA range instead of minutes, to every client.", "pr_url": "https://git.example.invalid/order-tracking-service/pull/725", "team_id": "logistics-be", "merged_at": "2026-11-03T18:00:00+05:30", "released_in": "order-tracking-service@5.3.0"},

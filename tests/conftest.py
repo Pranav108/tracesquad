@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from bugmock.api import create_app
+from tracesquad.api import create_app
 
 
 @pytest.fixture
@@ -29,10 +29,14 @@ def setup_user(client):
 
 @pytest.fixture
 def run(client):
-    """Post a repro run and return the JSON body."""
+    """Post a repro run for one bug and return the JSON body."""
 
-    def _run(mock_user_id: str, build_id: str, device_id: str, steps: list[dict]) -> dict:
-        body = {"build_id": build_id, "mock_user_id": mock_user_id, "device_id": device_id, "steps": steps}
-        return client.post("/repro/runs", json=body).json()
+    def _run(bug_ref: str, mock_user_id: str, build_id: str, device_id: str, steps: list[dict], env: str | None = None) -> dict:
+        body = {"bug_ref": bug_ref, "build_id": build_id, "mock_user_id": mock_user_id, "device_id": device_id, "steps": steps}
+        if env is not None:
+            body["env"] = env
+        r = client.post("/repro/runs", json=body)
+        assert r.status_code == 200, r.text
+        return r.json()
 
     return _run

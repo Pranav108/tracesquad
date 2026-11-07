@@ -68,7 +68,7 @@
     {"log_id": "LOG-pay04-3", "ts": "2026-11-04T21:16:20+05:30", "env": "prod", "source": "backend", "service": "payment-service", "endpoint": "/payments/cancel", "method": "POST", "status": 200, "level": "info", "trace_id": "tr-pay04-2", "user_id": "U-61540", "app_version": "18.3", "message": "payment cancelled by user"}
   ],
   "impacts": [
-    {"error_signature": "app.payment.upi_intent_timeout", "first_seen": "2026-09-30T10:00:00+05:30", "affected_users": 610, "by_app_version": {"18.2": 180, "18.3": 430}, "note": "No occurrences on 18.4+"}
+    {"error_signature": "app.payment.upi_intent_timeout", "first_seen": "2026-09-30T10:00:00+05:30", "affected_users": 610, "by_app_version": {"18.2": 180, "18.3": 430}, "by_platform": {"android": 610}, "note": "No occurrences on 18.4+"}
   ],
   "known_bugs": [
     {"bug_id": "BUG-1152", "title": "UPI payment stuck on 'Processing' on Android 14", "status": "fixed", "layer": "frontend", "affected_platforms": ["android"], "affected_versions": ["18.2", "18.3"], "affected_os": ["14"], "fixed_in": "18.4", "thread_url": "https://chat.example.invalid/app-bugs/p/1152", "summary": "On Android 14 the UPI intent result never reached the app, so payment spun on 'Processing' until timeout.", "error_signature": "app.payment.upi_intent_timeout"},
@@ -84,6 +84,8 @@
       "devices": ["galaxy-m32", "pixel-7"],
       "backend": null,
       "observed": "Payment stays on 'Processing' for 3 minutes, then times out",
+      "observed_ok": "The UPI app opens, payment completes in a few seconds, and the order is confirmed",
+      "missing_state": {"cart": "Payment can't start: the cart is empty, so there is nothing to pay for", "payment_method:upi": "Payment shows no saved UPI method; tapping Pay with UPI asks to add one first"},
       "artifacts": {"video_url": "https://artifacts.example.invalid/pay04-upi.mp4"},
       "network": [{"method": "POST", "endpoint": "/payments/upi/intent", "status": 200, "response": {"intent_id": "UPI-SBX-1"}}],
       "sandbox_logs": [{"source": "client", "service": "android-app", "level": "warn", "message": "upi_intent_timeout after 180s", "error_signature": "app.payment.upi_intent_timeout"}],
@@ -91,7 +93,7 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-PAY-04", "bug_ref": "BUG-1152", "team_id": "checkout-fe", "layer": "frontend", "title": "Handle UPI intent result on Android 14", "pr_url": "https://git.example.invalid/consumer-app/pull/9655", "ships_in": "android-18.4", "target": "payment", "platforms": ["android"], "published": true}
+    {"fix_id": "FIX-PAY-04", "bug_ref": "BUG-1152", "team_id": "checkout-fe", "layer": "frontend", "title": "Handle UPI intent result on Android 14", "pr_url": "https://git.example.invalid/consumer-app/pull/9655", "ships_in": "android-18.4", "target": "payment", "platforms": ["android"], "culprit_change_id": "CHG-441", "published": true}
   ],
   "changes": [
     {"change_id": "CHG-441", "repo": "consumer-app", "area": "payment", "platforms": ["android"], "title": "Handle UPI intent result on Android 14", "summary": "Reads the UPI intent result the way Android 14 returns it.", "pr_url": "https://git.example.invalid/consumer-app/pull/8401", "team_id": "checkout-fe", "merged_at": "2026-10-05T12:00:00+05:30", "released_in": "18.4"}

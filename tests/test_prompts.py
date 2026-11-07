@@ -5,11 +5,16 @@ from pathlib import Path
 
 import pytest
 
-from bugmock.api import create_app
+import yaml
 
-PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
-AGENTS = ["triage", "telios", "kinetics", "espida", "atlas", "gremlin"]
-ENDPOINT = re.compile(r"\b(GET|POST) (/[A-Za-z0-9_{}./-]+)")
+from tracesquad.api import create_app
+
+ROOT = Path(__file__).resolve().parent.parent
+PROMPTS = ROOT / "prompts"
+AGENTS = [a["name"] for a in yaml.safe_load((ROOT / "squad.yaml").read_text())["agents"]]
+# An endpoint as the prompts name it (`GET /fixes/{fix_id}`), not a concrete call (`tsq GET /fixes/FIX-1`).
+ENDPOINT = re.compile(r"(?<!tsq )\b(GET|POST) (/[A-Za-z0-9_{}./-]+)")
+TSQ_CALL = re.compile(r"~/\.tracesquad/bin/tsq (GET|POST) '?(/[^'`\s?]*)")
 
 
 def routes() -> set[tuple[str, str]]:
@@ -37,7 +42,7 @@ def test_prompt_hides_admin_and_names_peers(agent):
 
 def scenario_values() -> set[str]:
     """Ids and values that would give a scenario away if a prompt contained them."""
-    from bugmock.store import DATA_DIR, Store, load_dataset
+    from tracesquad.store import DATA_DIR, Store, load_dataset
 
     s = Store(load_dataset(DATA_DIR))
     values = set(s.users) | set(s.reports) | set(s.known_bugs) | set(s.fixes) | set(s.impacts)
@@ -52,9 +57,27 @@ def scenario_values() -> set[str]:
 
 
 @pytest.mark.parametrize("agent", AGENTS)
-def test_prompt_has_base_url_and_no_scenario_values(agent):
+def test_prompt_calls_the_api_through_tsq_and_holds_no_url(agent):
     text = (PROMPTS / f"{agent}.md").read_text()
-    assert re.search(r"\*\*Base URL:\*\* `https://[^`]+`", text), f"{agent}.md has no base URL line"
+    assert "## Tools: the TraceSquad API" in text
+    assert "Call the API **only** through `tsq`" in text
+    assert not re.search(r"https?://", text), f"{agent}.md contains a URL; agents find the API through tsq"
+    assert "never invent a response" in text and "not reachable" in text
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_prompt_tsq_examples_hit_real_routes(agent):
+    text = (PROMPTS / f"{agent}.md").read_text()
+    patterns = [(m, re.compile("^" + re.sub(r"\{[^}]+\}", "[^/]+", p) + "$")) for m, p in routes()]
+    calls = TSQ_CALL.findall(text)
+    assert calls, f"{agent}.md shows no tsq call"
+    for method, path in calls:
+        assert any(m == method and rx.match(path) for m, rx in patterns), f"{agent}.md: tsq {method} {path} matches no route"
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_prompt_has_no_scenario_values(agent):
+    text = (PROMPTS / f"{agent}.md").read_text()
     leaked = sorted(v for v in scenario_values() if v in text)
     assert not leaked, f"{agent}.md gives away scenario values: {leaked}"
 
@@ -79,3 +102,69 @@ def test_verification_requires_a_baseline():
 def test_atlas_searches_app_changes_by_release():
     atlas = (PROMPTS / "atlas.md").read_text()
     assert "released in or before the reporter's app version" in atlas
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_protocol_keeps_bugs_moving_and_ends_them(agent):
+    text = (PROMPTS / f"{agent}.md").read_text()
+    assert "[NUDGE]" in text and "[CLOSE]" in text
+    assert "wakes only the agents it is sent to" in text
+    assert "Never go quiet" in text and "`[REPORT]` to **Triage**" in text
+    for outcome in ("duplicate", "known_open", "wont_fix", "already_fixed", "not_reproduced", "escalated"):
+        assert outcome in text, f"{agent}.md protocol is missing the {outcome} outcome"
+
+
+def test_triage_watches_and_closes():
+    triage = (PROMPTS / "triage.md").read_text()
+    assert "## Keeping bugs moving" in triage and "sweep" in triage
+    assert "## How a bug ends" in triage
+    for outcome in ("duplicate", "known_open", "wont_fix", "already_fixed", "not_reproduced", "escalated"):
+        assert f"| `{outcome}` |" in triage
+
+
+def test_atlas_checks_culprit_and_scopes_every_platform():
+    atlas = (PROMPTS / "atlas.md").read_text()
+    assert "all four" in atlas and "**Timing:**" in atlas and "**Platforms:**" in atlas
+    assert '"platforms": ["android", "ios"]' in atlas and "every affected platform" in atlas
+    assert "next release candidate" in atlas and "built_on" in atlas
+    assert "Use the reporter's platform" not in atlas
+
+
+def test_kinetics_baselines_on_release_candidate_per_platform():
+    kinetics = (PROMPTS / "kinetics.md").read_text()
+    assert "## Baselines on the next release candidate" in kinetics
+    assert "every** platform passes" in kinetics and "twin" in kinetics
+
+
+def test_gremlin_checks_before_closing():
+    gremlin = (PROMPTS / "gremlin.md").read_text()
+    assert "The culprit fits the evidence" in gremlin and "Every affected platform is covered" in gremlin
+    assert "sent to **Triage**" in gremlin
+
+
+def test_espida_and_telios_support_other_platforms():
+    assert "by_platform" in (PROMPTS / "espida.md").read_text()
+    assert "## Twins on another platform" in (PROMPTS / "telios.md").read_text()
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_every_prompt_knows_budgets_are_enforced(agent):
+    text = (PROMPTS / f"{agent}.md").read_text()
+    assert "**429**" in text and "GET /budget/{bug_ref}" in text
+    assert "7 app runs per platform" in text and "4 API checks" in text
+
+
+def test_kinetics_reads_runs_and_checks_fixes_in_their_env():
+    kinetics = (PROMPTS / "kinetics.md").read_text()
+    assert "### Reading a run" in kinetics and "never** a pass" in kinetics
+    assert '"bug_ref": "RPT-123"' in kinetics and "preprod-atl-0002" in kinetics
+    assert "with `env` set to **Atlas's env**" in kinetics
+    assert 'always `"preprod"`' not in kinetics
+
+
+def test_backend_fixes_name_their_env():
+    atlas = (PROMPTS / "atlas.md").read_text()
+    assert "preprod: {env, service, version}" in atlas and "the API refuses a third" in atlas
+    assert "preprod_env" in (PROMPTS / "espida.md").read_text()
+    assert "A budget is used up" in (PROMPTS / "triage.md").read_text()
+    assert "quotes what the run showed" in (PROMPTS / "telios.md").read_text()

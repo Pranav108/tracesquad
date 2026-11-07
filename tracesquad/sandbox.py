@@ -5,13 +5,14 @@ or on POST /sandbox/reset.
 """
 
 import re
+from collections import Counter
 from typing import Any
 
 from pydantic import BaseModel
 
-from bugmock.errors import ApiError
-from bugmock.models import Build, LogEntry
-from bugmock.store import DataError, Store, parse_cohort_id
+from tracesquad.errors import ApiError
+from tracesquad.models import Build, LogEntry
+from tracesquad.store import DataError, Store, parse_cohort_id
 
 
 class MockUser(BaseModel):
@@ -43,6 +44,28 @@ def has_tag(tags: list[str], requirement: str) -> bool:
     return any(tag == requirement or tag.startswith(requirement + ":") for tag in tags)
 
 
+SHARED_PREPROD = "preprod"
+
+# Per-bug limits the API enforces. The prompts break them down (3 runs to reproduce, then a baseline
+# and a check for each of 2 fix attempts); the API only holds the totals.
+LIMITS = {"fix_attempts": 2, "runs_per_platform": 7, "api_checks": 4}
+
+
+class PreviewEnv(BaseModel):
+    """Pre-prod as one backend fix attempt sees it: shared pre-prod plus that attempt's deploy.
+
+    Each attempt gets its own, like a per-PR preview environment, so attempts and bugs never
+    overwrite each other. Never serialize fixes_scenario to agents.
+    """
+
+    env: str
+    attempt_id: str
+    bug_ref: str
+    service: str
+    version: str
+    fixes_scenario: str | None = None
+
+
 class Sandbox:
     def __init__(self, store: Store):
         self.store = store
@@ -51,12 +74,14 @@ class Sandbox:
     def reset(self) -> None:
         self.users: dict[str, MockUser] = {}
         self.logs: list[LogEntry] = []
+        # shared pre-prod: the unfixed baseline; only the operator deploys to it
         self.services: dict[str, str] = dict(self.store.dataset.sandbox_defaults)
+        self.preview_envs: dict[str, PreviewEnv] = {}
+        # bug_ref -> what it has used: "fix_attempts", "api_checks", "runs:<platform>"
+        self.usage: dict[str, Counter] = {}
         self.published_fixes: set[str] = {f.fix_id for f in self.store.dataset.fixes if f.published}
         self.attempts: list[dict[str, Any]] = []
         self.dynamic_builds: dict[str, DynamicBuild] = {}
-        # service -> scenario its current Atlas deploy fixes (None: the deploy fixes nothing)
-        self.fixed_by_deploy: dict[str, str | None] = {}
         self._user_seq = 0
         self._run_seq = 0
         self._attempt_seq = 0
@@ -143,8 +168,65 @@ class Sandbox:
         if service not in self.services:
             raise ApiError(404, f"service '{service}' not found in sandbox; see GET /sandbox/services")
         self.services[service] = version
-        self.fixed_by_deploy[service] = None
         return dict(self.services)
+
+    def preview(self, env: str) -> PreviewEnv | None:
+        """None for shared pre-prod; 404 for an env that doesn't exist."""
+        if env == SHARED_PREPROD:
+            return None
+        if env not in self.preview_envs:
+            known = ", ".join([SHARED_PREPROD, *self.preview_envs]) or SHARED_PREPROD
+            raise ApiError(404, f"pre-prod env '{env}' not found; use one of: {known}")
+        return self.preview_envs[env]
+
+    def services_in(self, env: str) -> dict[str, str]:
+        preview = self.preview(env)
+        services = dict(self.services)
+        if preview is not None:
+            services[preview.service] = preview.version
+        return services
+
+    def backend_buggy(self, env: str, service: str, versions: list[str], scenario_id: str) -> bool:
+        """Does `service` in `env` still have the scenario's bug? An Atlas deploy keeps the base version
+        number (3.12.0-atlas-2), so it fixes the bug only if it is the right fix for that scenario."""
+        preview = self.preview(env)
+        if preview is not None and preview.service == service:
+            return base_version(preview.version) in versions and preview.fixes_scenario != scenario_id
+        # shared pre-prod changes only by operator deploys, judged by version alone
+        return base_version(self.services.get(service, "")) in versions
+
+    def check_budget(self, bug_ref: str, kind: str, platform: str | None = None) -> None:
+        """429 if the bug has used up this budget. Call after validating, before doing the work."""
+        key, limit = (f"runs:{platform}", LIMITS["runs_per_platform"]) if kind == "runs" else (kind, LIMITS[kind])
+        used = self.usage.get(bug_ref, Counter())[key]
+        if used >= limit:
+            what = {
+                "fix_attempts": f"{limit} fix attempts",
+                "api_checks": f"{limit} API checks",
+                "runs": f"{limit} app runs on {platform}",
+            }[kind]
+            raise ApiError(
+                429,
+                f"budget used up: {bug_ref} has had {what}, the most one bug gets. "
+                f"Stop and [REPORT] to Triage with what is known; see GET /budget/{bug_ref}",
+            )
+
+    def spend(self, bug_ref: str, kind: str, platform: str | None = None) -> None:
+        key = f"runs:{platform}" if kind == "runs" else kind
+        self.usage.setdefault(bug_ref, Counter())[key] += 1
+
+    def budget(self, bug_ref: str) -> dict[str, Any]:
+        used = self.usage.get(bug_ref, Counter())
+
+        def line(key: str, limit: int) -> dict[str, int]:
+            return {"used": used[key], "limit": limit, "left": max(limit - used[key], 0)}
+
+        return {
+            "bug_ref": bug_ref,
+            "fix_attempts": line("fix_attempts", LIMITS["fix_attempts"]),
+            "runs": {p: line(f"runs:{p}", LIMITS["runs_per_platform"]) for p in ("android", "ios")},
+            "api_checks": line("api_checks", LIMITS["api_checks"]),
+        }
 
     def next_attempt_no(self) -> int:
         self._attempt_seq += 1

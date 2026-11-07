@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from bugmock.models import CohortDimensions, Dataset
+from tracesquad.models import CohortDimensions, Dataset
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -154,6 +154,9 @@ def _check_integrity(ds: Dataset) -> None:
     for f in ds.fixes:
         if f.layer == "backend":
             need(f.target, services, f"fix {f.fix_id} target")
+    changes = {c.change_id for c in ds.changes}
+    for f in ds.fixes:
+        need(f.culprit_change_id, changes, f"fix {f.fix_id} culprit_change_id")
     for c in ds.changes:
         need(c.team_id, teams, f"change {c.change_id} team_id")
     for chk in ds.api_checks:
@@ -169,6 +172,14 @@ def _check_integrity(ds: Dataset) -> None:
                 need(build_id, builds, f"repro rule {rule.rule_id} affected_builds")
         for device_id in rule.devices or []:
             need(device_id, set(devices), f"repro rule {rule.rule_id} devices")
+        need(rule.scenario_id, scenarios, f"repro rule {rule.rule_id} scenario_id")
+        if set(rule.missing_state) != set(rule.requires_tags):
+            raise DataError(
+                f"repro rule {rule.rule_id}: missing_state must describe every requires_tags item "
+                f"(has {sorted(rule.missing_state)}, needs {sorted(rule.requires_tags)})"
+            )
+        if rule.network_ok is not None and rule.backend is None:
+            raise DataError(f"repro rule {rule.rule_id}: network_ok only applies to rules with a backend condition")
 
 
 class Store:

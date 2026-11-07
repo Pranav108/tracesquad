@@ -8,23 +8,23 @@ def OPEN(rid):
 
 def test_menu03_small_screen(setup_user, run):
     mu = setup_user(COHORT, MENU_CALLS)
-    r = run(mu, "ios-18.5", "iphone-se-2", OPEN("R-5520"))
+    r = run("RPT-103", mu, "ios-18.5", "iphone-se-2", OPEN("R-5520"))
     assert r["result"] == "reproduced" and "overlaps" in r["observed"]
 
 
 def test_menu03_regular_screen(setup_user, run):
     mu = setup_user(COHORT, MENU_CALLS)
-    assert run(mu, "ios-18.5", "iphone-15", OPEN("R-5520"))["result"] == "not_reproduced"
+    assert run("RPT-103", mu, "ios-18.5", "iphone-15", OPEN("R-5520"))["result"] == "not_reproduced"
 
 
 def test_menu03_short_name(setup_user, run):
     mu = setup_user(COHORT, MENU_CALLS)
-    assert run(mu, "ios-18.5", "iphone-se-2", OPEN("R-2210"))["result"] == "not_reproduced"
+    assert run("RPT-103", mu, "ios-18.5", "iphone-se-2", OPEN("R-2210"))["result"] == "not_reproduced"
 
 
-def test_menu03_fixed_build(setup_user, run):
+def test_menu03_release_candidate_still_broken(setup_user, run):
     mu = setup_user(COHORT, MENU_CALLS)
-    assert run(mu, "ios-18.6-rc1", "iphone-se-2", OPEN("R-5520"))["result"] == "not_reproduced"
+    assert run("RPT-103", mu, "ios-18.6-rc1", "iphone-se-2", OPEN("R-5520"))["result"] == "reproduced"
 
 
 def test_menu03_logs_clean(client):

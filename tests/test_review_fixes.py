@@ -50,7 +50,7 @@ def test_publish_unknown_fix_404(client):
 # Finding 4: sandbox logs must not contradict the scenario on off-path runs
 def test_track05_newer_app_still_sees_schema_v2(client, setup_user, run):
     mu = setup_user(TRACK, TRACK_CALLS)
-    run(mu, "android-18.4", "oneplus-nord", [{"screen": "order_tracking", "action": "open"}])
+    run("RPT-105", mu, "android-18.4", "oneplus-nord", [{"screen": "order_tracking", "action": "open"}])
     logs = sandbox_logs(client, mu)
     assert [l["response_excerpt"]["schema_version"] for l in logs if l["source"] == "backend"] == [2]
     assert not any(l["level"] == "error" for l in logs)
@@ -60,7 +60,8 @@ def test_no_sandbox_logs_when_state_missing(client, setup_user, run):
     mu = setup_user("android-18.5-DEL-G1-none", [])
     steps = [{"screen": s, "action": a} for s, a in
              [("home", "open"), ("checkout", "open"), ("payment", "pay_upi"), ("order_tracking", "open")]]
-    assert run(mu, "android-18.5", "pixel-7", steps)["result"] == "not_reproduced"
+    for bug in ("RPT-101", "RPT-102", "RPT-104", "RPT-105"):
+        assert run(bug, mu, "android-18.5", "pixel-7", steps)["result"] == "not_reproduced"
     assert sandbox_logs(client, mu) == []
 
 

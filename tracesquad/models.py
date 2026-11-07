@@ -122,6 +122,8 @@ class LogEntry(BaseModel):
     message: str
     error_signature: str | None = None
     response_excerpt: dict[str, Any] | None = None
+    # sandbox lines only: "preprod", or the backend fix attempt's own env, e.g. "preprod-atl-0002"
+    preprod_env: str | None = None
 
 
 class LogTemplate(BaseModel):
@@ -149,6 +151,8 @@ class Impact(BaseModel):
     first_seen: datetime
     affected_users: int
     by_app_version: dict[str, int]
+    # users per platform (android / ios), so the fix can cover every affected platform
+    by_platform: dict[str, int] = {}
     note: str
 
 
@@ -172,8 +176,14 @@ class ReproRule(BaseModel):
     devices: list[str] | None = None
     backend: BackendCondition | None = None
     observed: str
+    # what the trigger screen shows when the bug doesn't happen (fixed build, other device, fixed backend)
+    observed_ok: str
+    # one entry per requires_tags item, in the order a run reports them: what the screen shows without it
+    missing_state: dict[str, str] = {}
     artifacts: dict[str, str] = {}
     network: list[dict[str, Any]] = []
+    # the calls once the backend is fixed; rules with a backend condition only (else `network` is reused)
+    network_ok: list[dict[str, Any]] | None = None
     sandbox_logs: list[LogTemplate] = []
     sandbox_logs_ok: list[LogTemplate] = []
 
@@ -190,6 +200,8 @@ class Fix(BaseModel):
     target: str
     # platforms a frontend fix applies to
     platforms: list[str] = []
+    # the change that caused the bug; a fix built from another change does not fix it
+    culprit_change_id: str | None = None
     # True for fixes that already shipped before the scenario (visible from the start)
     published: bool = False
 

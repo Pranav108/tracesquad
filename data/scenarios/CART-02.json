@@ -8,17 +8,23 @@
       "duplicate_of": null,
       "fix_id": "FIX-CART-02",
       "expected_path": [
-        "Triage: no duplicate (BUG-1207 is a different issue); unclear class; asks Espida",
-        "Espida: backend 200s plus client crash app.checkout.discount_row_crash -> points to frontend",
+        "Triage: no duplicate (BUG-1207 is a different issue, wont_fix); unclear class; asks Espida",
+        "Espida: backend 200s plus client crash app.checkout.discount_row_crash -> frontend; impact 3410 users (android 3000, ios 410); Triage asks Kinetics to reproduce",
         "Kinetics asks Telios; Telios gets android-18.2 (github_actions, 18 min)",
         "Telios: create_user android-18.2-PNQ-G3-gold_monthly -> set_address PNQ -> set_group G3 -> activate_plan gold_monthly -> fill_cart R-3391 -> apply_coupon SAVE50 (asks Triage for the code; only the journey has it)",
-        "Kinetics: android-18.2 on redmi-note-10, cart/open + checkout/open -> reproduced; reports to checkout-fe",
-        "After the fix: android-18.6-rc1 -> not_reproduced (fix passes)"
+        "Kinetics: android-18.2 on redmi-note-10, cart/open + checkout/open -> reproduced; reports to Atlas",
+        "Atlas: culprit CHG-411 (app 18.2, android + ios; CHG-412 is a service distractor); Gremlin quotes PRD-CHECKOUT-V3 (label optional) -> frontend; scope android + ios",
+        "Baselines on the next release: Telios makes an iOS twin (ios-18.5-PNQ-G3-gold_monthly, same calls); Kinetics: android-18.6-rc1 on redmi-note-10 and ios-18.6-rc1 on an iPhone -> reproduced on both",
+        "Atlas: POST /atlas/fixes frontend checkout, platforms android + ios, culprit CHG-411 -> android-18.6-rc1-atlas-1 and ios-18.6-rc1-atlas-1",
+        "Kinetics: both Atlas builds, same users, devices and steps -> not_reproduced (verified on both platforms)",
+        "Gremlin: checks culprit fit and platform coverage; PRD-CHECKOUT-V3 update + known issue, app-18.6 note, reply in #checkout-v3, inform checkout-fe, RCA to Triage; Triage tells the reporter the fix ships in 18.6"
       ],
       "unexpected_paths": [
-        "Telios skips the coupon -> not_reproduced",
+        "Telios skips the coupon -> not_reproduced, observed: no coupon is applied",
         "Kinetics uses an ios build with this android mock user -> 422",
-        "Espida filters source=client -> only the crash entries"
+        "Espida filters source=client -> only the crash entries",
+        "Atlas fixes android only -> Gremlin sees ios in the impact split and in CHG-411's platforms, and sends it back to Atlas",
+        "Atlas names CHG-412 as the culprit -> its builds still reproduce (verification fails)"
       ]
     }
   ],
@@ -80,7 +86,7 @@
     {"deploy_id": "DEP-203", "service": "restaurant-service", "version": "2.19.0", "deployed_at": "2026-11-04T11:00:00+05:30", "change": "Menu image CDN switch"}
   ],
   "impacts": [
-    {"error_signature": "app.checkout.discount_row_crash", "first_seen": "2026-10-21T09:00:00+05:30", "affected_users": 3410, "by_app_version": {"18.2": 950, "18.3": 1120, "18.4": 820, "18.5": 520}, "note": "Only orders with both a Gold discount and a coupon"}
+    {"error_signature": "app.checkout.discount_row_crash", "first_seen": "2026-10-21T09:00:00+05:30", "affected_users": 3410, "by_app_version": {"18.2": 950, "18.3": 1120, "18.4": 820, "18.5": 520}, "by_platform": {"android": 3000, "ios": 410}, "note": "Only orders with both a Gold discount and a coupon"}
   ],
   "known_bugs": [
     {"bug_id": "BUG-1207", "title": "SAVE50 not applicable with Gold on orders under ₹199", "status": "wont_fix", "layer": "backend", "affected_platforms": ["android", "ios"], "affected_versions": ["18.4", "18.5"], "affected_os": null, "fixed_in": null, "thread_url": "https://chat.example.invalid/app-bugs/p/1207", "summary": "Working as intended: coupon rules exclude Gold orders below the minimum value.", "error_signature": null}
@@ -91,10 +97,12 @@
       "scenario_id": "CART-02",
       "trigger": {"screen": "checkout", "action": "open"},
       "requires_tags": ["plan:gold_monthly", "cart", "coupon:SAVE50"],
-      "affected_builds": ["android-18.2", "android-18.3", "android-18.4", "android-18.5", "ios-18.4", "ios-18.5"],
+      "affected_builds": ["android-18.2", "android-18.3", "android-18.4", "android-18.5", "android-18.6-rc1", "ios-18.4", "ios-18.5", "ios-18.6-rc1"],
       "devices": null,
       "backend": null,
       "observed": "Checkout shows a 'Something went wrong' dialog; the discount section never renders",
+      "observed_ok": "Checkout shows both discount rows (Gold discount ₹30 and SAVE50 ₹50) and the total; Place order is enabled",
+      "missing_state": {"cart": "Checkout shows 'Your cart is empty' and a Browse restaurants button; there are no discounts to show", "plan:gold_monthly": "Checkout shows the SAVE50 coupon row and the total; there is no Gold monthly discount row", "coupon:SAVE50": "Checkout shows the Gold discount row and the total; no coupon is applied"},
       "artifacts": {"video_url": "https://artifacts.example.invalid/cart02-checkout.mp4", "screenshot_url": "https://artifacts.example.invalid/cart02-checkout.png"},
       "network": [
         {"method": "POST", "endpoint": "/cart/coupon", "status": 200, "response": {"code": "SAVE50", "discount": 50}},
@@ -105,7 +113,7 @@
     }
   ],
   "fixes": [
-    {"fix_id": "FIX-CART-02", "bug_ref": "RPT-102", "team_id": "checkout-fe", "layer": "frontend", "title": "Render discount rows when label is missing", "pr_url": "https://git.example.invalid/consumer-app/pull/9921", "ships_in": "android-18.6-rc1", "target": "checkout", "platforms": ["android", "ios"]}
+    {"fix_id": "FIX-CART-02", "bug_ref": "RPT-102", "team_id": "checkout-fe", "layer": "frontend", "title": "Render discount rows when label is missing", "pr_url": "https://git.example.invalid/consumer-app/pull/9921", "ships_in": "android-18.6-rc1", "target": "checkout", "platforms": ["android", "ios"], "culprit_change_id": "CHG-411"}
   ],
   "changes": [
     {"change_id": "CHG-411", "repo": "consumer-app", "area": "checkout", "platforms": ["android", "ios"], "title": "Checkout v3: new DiscountRow component", "summary": "Renders each discount as a row showing its label and amount.", "pr_url": "https://git.example.invalid/consumer-app/pull/8810", "team_id": "checkout-fe", "merged_at": "2026-10-14T16:00:00+05:30", "released_in": "18.2"},

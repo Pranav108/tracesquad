@@ -1,0 +1,121 @@
+#!/bin/sh
+# tsq: the TraceSquad API client. Agents call the API only through this, so no prompt, template or
+# agent ever holds the API's address, and moving the API (new port, new tunnel URL) changes nothing
+# on the agents' side.
+#
+#   tsq GET /users/U-12345
+#   tsq GET '/logs?user_id=U-12345&env=prod'          (quote a path that has ? or &)
+#   tsq POST /sandbox/users '{"cohort_id": "..."}'     (a JSON body; @file or @- reads one)
+#   tsq url                                            the base URL a call would use now
+#   tsq doctor                                         every place it looks, and what answers
+#
+# The base URL is looked up on every call. The first candidate whose GET /health says
+# "tracesquad-api" wins:
+#   1. $TRACESQUAD_API_URL
+#   2. ~/.tracesquad/api-url        written by scripts/serve.sh on the machine running the API
+#   3. a discovery URL             $TRACESQUAD_DISCOVERY_URL or ~/.tracesquad/discovery-url: a URL
+#                                  whose body is the base URL (scripts/serve.sh --publish keeps one)
+#   4. http://127.0.0.1:8095
+#
+# Exit codes: 0 success; 1 the API answered with an HTTP error (the body is still printed);
+# 2 usage error, or the API is not reachable anywhere.
+set -u
+
+TSQ_HOME="${TRACESQUAD_HOME:-$HOME/.tracesquad}"
+DEFAULT_URL="${TRACESQUAD_DEFAULT_URL:-http://127.0.0.1:8095}"   # override only for tests
+SERVICE="tracesquad-api"
+
+trim() { tr -d ' \t\r\n' | sed 's#/*$##'; }
+
+first_line() { [ -r "$1" ] && head -n 1 "$1" | trim; }
+
+# Prints "label<TAB>url" for each candidate, in order. A discovery URL is fetched fresh (with a
+# cache-buster, since raw.githubusercontent.com caches files for minutes).
+candidates() {
+  printf 'env TRACESQUAD_API_URL\t%s\n' "$(printf '%s' "${TRACESQUAD_API_URL:-}" | trim)"
+  printf '%s\t%s\n' "$TSQ_HOME/api-url" "$(first_line "$TSQ_HOME/api-url")"
+  discovery="${TRACESQUAD_DISCOVERY_URL:-$(first_line "$TSQ_HOME/discovery-url")}"
+  if [ -n "$discovery" ]; then
+    case "$discovery" in *\?*) sep='&' ;; *) sep='?' ;; esac
+    found=$(curl -fsS --max-time 5 "$discovery${sep}tsq=$(date +%s)" 2>/dev/null | head -n 1 | trim)
+    printf 'discovery %s\t%s\n' "$discovery" "$found"
+  else
+    printf 'discovery (none set)\t\n'
+  fi
+  printf 'default\t%s\n' "$DEFAULT_URL"
+}
+
+alive() {
+  [ -n "$1" ] && curl -fsS --max-time 3 "$1/health" 2>/dev/null | grep -q "\"$SERVICE\""
+}
+
+resolve() {
+  candidates | while IFS="$(printf '\t')" read -r _label url; do
+    if alive "$url"; then
+      printf '%s\n' "$url"
+      break
+    fi
+  done
+}
+
+unreachable() {
+  {
+    echo "tsq: the TraceSquad API is not reachable. Looked in:"
+    candidates | while IFS="$(printf '\t')" read -r label url; do
+      echo "  - $label: ${url:-(empty)}"
+    done
+    echo "Nothing there answered GET /health as $SERVICE. The operator starts the API with"
+    echo "scripts/serve.sh in the TraceSquad repo. Do not guess a URL or invent a response."
+  } >&2
+  exit 2
+}
+
+usage() {
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//' >&2
+  exit 2
+}
+
+[ $# -ge 1 ] || usage
+case "$1" in
+  -h|--help|help) usage ;;
+  url)
+    base=$(resolve)
+    [ -n "$base" ] || unreachable
+    printf '%s\n' "$base"
+    exit 0
+    ;;
+  doctor)
+    candidates | while IFS="$(printf '\t')" read -r label url; do
+      if alive "$url"; then state="answers"; elif [ -n "$url" ]; then state="no answer"; else state="not set"; fi
+      printf '%-12s %s\n  %s\n' "[$state]" "$label" "${url:-(empty)}"
+    done
+    base=$(resolve)
+    if [ -n "$base" ]; then echo "tsq will use: $base"; exit 0; fi
+    echo "tsq will use: nothing; the API is not reachable" >&2
+    exit 2
+    ;;
+esac
+
+[ $# -ge 2 ] || usage
+method=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]')
+path="$2"
+case "$path" in /*) ;; *) path="/$path" ;; esac
+
+base=$(resolve)
+[ -n "$base" ] || unreachable
+
+out=$(mktemp "${TMPDIR:-/tmp}/tsq.XXXXXX") || exit 2
+trap 'rm -f "$out"' EXIT
+if [ $# -ge 3 ]; then
+  code=$(curl -sS --max-time 120 -o "$out" -w '%{http_code}' -X "$method" \
+    -H 'Content-Type: application/json' --data-binary "$3" "$base$path") || code=000
+else
+  code=$(curl -sS --max-time 120 -o "$out" -w '%{http_code}' -X "$method" "$base$path") || code=000
+fi
+cat "$out"
+[ -s "$out" ] && echo
+case "$code" in
+  2??) exit 0 ;;
+  000) echo "tsq: no response from $base$path" >&2; exit 2 ;;
+  *) echo "tsq: HTTP $code from $method $path" >&2; exit 1 ;;
+esac

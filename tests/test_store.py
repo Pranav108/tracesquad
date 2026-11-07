@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bugmock.store import DATA_DIR, DataError, Store, load_dataset, parse_cohort_id
+from tracesquad.store import DATA_DIR, DataError, Store, load_dataset, parse_cohort_id
 
 
 def base_shared() -> dict:
@@ -125,3 +125,13 @@ def test_atlas_gremlin_data():
     assert {"PRD-GOLD-RENEW", "PRD-CHECKOUT-V3", "PRD-RESTO-HEADER", "PRD-TRACK-ETA"} <= set(s.prds)
     assert any("label" in sec.body for sec in s.prds["PRD-CHECKOUT-V3"].sections)
     assert {t.channel for t in s.threads.values()} >= {"#gold-support", "#checkout-v3", "#design-reviews", "#logistics-oncall", "#app-release"}
+
+
+def test_repro_rule_must_describe_every_missing_state():
+    ds = load_dataset(DATA_DIR)
+    from tracesquad.store import _check_integrity
+
+    rule = next(r for r in ds.repro_rules if r.rule_id == "R-CART02")
+    del rule.missing_state["coupon:SAVE50"]
+    with pytest.raises(DataError, match="R-CART02.*missing_state"):
+        _check_integrity(ds)

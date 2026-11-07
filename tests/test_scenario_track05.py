@@ -13,17 +13,17 @@ def test_track05_order_needs_payment_409(client, setup_user):
 
 def test_track05_expected_path(client, setup_user, run):
     mu = setup_user(COHORT, TRACK_CALLS)
-    first = run(mu, "android-18.3", "oneplus-nord", STEPS)
+    first = run("RPT-105", mu, "android-18.3", "oneplus-nord", STEPS)
     assert first["result"] == "reproduced" and "blank" in first["observed"]
     client.post("/sandbox/deploy", json={"service": "order-tracking-service", "version": "5.3.1"})
-    assert run(mu, "android-18.3", "oneplus-nord", STEPS)["result"] == "not_reproduced"
+    assert run("RPT-105", mu, "android-18.3", "oneplus-nord", STEPS)["result"] == "not_reproduced"
     logs = client.get("/logs", params={"env": "sandbox", "user_id": mu}).json()
     assert logs[-1]["response_excerpt"]["schema_version"] == 1
 
 
 def test_track05_newer_app_copes(setup_user, run):
     mu = setup_user(COHORT, TRACK_CALLS)
-    assert run(mu, "android-18.4", "oneplus-nord", STEPS)["result"] == "not_reproduced"
+    assert run("RPT-105", mu, "android-18.4", "oneplus-nord", STEPS)["result"] == "not_reproduced"
 
 
 def test_track05_evidence(client):
