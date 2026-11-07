@@ -4,6 +4,9 @@
 fix and a root-cause write-up, working like a team: they ask each other questions, with no coordinator
 and no fixed pipeline.**
 
+**Run it yourself:** send this repo's link to your switch-buddy on [Switch](https://github.com/sandbox-quantum/switch)
+and it sets up the whole squad for you.
+
 > **AI agents:** if you've been asked to set this squad up, read [AGENTS.md](AGENTS.md). It has the
 > recipe for Switch, Claude Code and any other agent platform. The structure is in [squad.yaml](squad.yaml).
 
