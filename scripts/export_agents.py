@@ -36,6 +36,9 @@ GENERIC_NOTES = f"""
   `to=`, the way your platform targets a message, in the bug's thread. A message wakes only the agents
   it is sent to; a `to=` the platform doesn't deliver wakes nobody.
 - Read the thread before asking anything.
+- Your instructions describe two rooms and a herald (a Switch setup). Without them, whoever runs the
+  squad plays the herald: it hands Triage each report as a `[NEW BUG]` and shows the reporter Triage's
+  `[PUBLIC]` messages. Everything else happens in the bug's one thread.
 - Nothing runs on a timer. Triage's checks for stuck bugs are woken by a `sweep` message that someone
   outside the agents sends it about every 10 minutes.
 {API_NOTE}
@@ -53,6 +56,8 @@ CLAUDE_CODE_NOTES = f"""
   and runs the agents in `to=`. Your teammates are {", ".join(NAMES)}. Anything outside a protocol
   message reaches nobody, so never go quiet: every reply holds at least one message.
 - A message addressed to the reporter, a team or the thread is shown to the person running the room.
+- There is no public room and no herald here: the room plays the herald. It hands Triage the report as
+  a `[NEW BUG]`, and shows Triage's `[PUBLIC]` messages to the person running it. There is no status card.
 {API_NOTE}
 """
 
@@ -68,17 +73,19 @@ Bug report: $ARGUMENTS
 
 1. **Check the API:** run `~/.tracesquad/bin/tsq GET /health`. If it fails, stop and tell the user to
    start it with `scripts/serve.sh` in a clone of the TraceSquad repo.
-2. **Keep the thread:** an ordered list of every message, starting with the bug report.
+2. **Keep the thread:** an ordered list of every message. It starts with the bug report, written as the
+   herald would hand it over: `[NEW BUG] bug=<report id> from=herald to=Triage reporter=user`, then the
+   report on the next line.
 3. **Start:** run the `triage` subagent with the thread.
 4. **Deliver, until the bug ends:** from each reply, take every protocol message (a block that starts
-   with `[ASK]`, `[ANSWER]`, `[NOT MINE]`, `[CLAIM]`, `[REPORT]`, `[NUDGE]`, `[CLOSE]` or `[RCA]`) and
+   with `[ASK]`, `[ANSWER]`, `[NOT MINE]`, `[CLAIM]`, `[REPORT]`, `[NUDGE]`, `[CLOSE]`, `[RCA]` or `[PUBLIC]`) and
    append it to the thread word for word. Then, for every agent named in a message's `to=`, run that
    subagent (its name in lower case) with the whole thread and a last line saying which messages are
-   for it. Run agents that don't depend on each other in parallel. Show the user any message addressed
-   to the reporter, a team or the thread.
+   for it. Run agents that don't depend on each other in parallel. Show the user every `[PUBLIC]` (it is
+   Triage talking to the reporter) and any message addressed to a team.
 5. **Sweep:** when no message is waiting for an agent and the bug isn't closed, run `triage` with the
    thread and the word `sweep`. That is its check for stuck bugs.
-6. **Stop** when Triage has posted a `[CLOSE]`, or has told the reporter after Gremlin's `[RCA]`. Also
+6. **Stop** when Triage has posted a `[CLOSE]` and its `[PUBLIC]`, or its `[PUBLIC]` after Gremlin's `[RCA]`. Also
    stop after 60 agent runs, and say where the bug stands. Then summarize: the outcome, the culprit and
    the fix (if any), how it was verified, and the thread.
 

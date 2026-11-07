@@ -21,17 +21,25 @@ docs:
   deploy_on_switch: SWITCH.md
   system: docs/SYSTEM.md
   api: docs/API.md
+  herald: docs/HERALD.md
 
 # How the squad is wired. There is no coordinator and no fixed pipeline.
 topology:
   style: peer-to-peer
-  rule: Each agent owns one area and answers only from it. Any agent may ask any other, in the bug's thread.
-  shared_record: The bug's thread in the squad's room. Every question, answer and result is posted there.
+  rule: Each agent owns one area and answers only from it. Any agent may ask any other, in the bug's work-log thread.
+  rooms:
+    public: >-
+      Where people report bugs; anyone in the community reads it. Each bug's thread holds the report,
+      the herald's status card and Triage's [PUBLIC] messages, nothing else. Agents never post there.
+    work_log: >-
+      Where the squad works; only the team reads it (a private channel). One thread per bug, opened by
+      the herald. Every question, answer and result is posted there: it is the bug's full record.
+  shared_record: The bug's thread in the work log room.
   wake_rule: >-
     An agent wakes only when a message targets it. In Switch that is send_targeted_message with
     target_names set to the agents in the message's to=, in the bug's thread_id. A to= alone wakes nobody.
   owner_of_every_bug: triage
-  talks_to_reporter: triage
+  talks_to_reporter: triage (only with [PUBLIC], which the herald copies into the public thread)
   closes_fixed_bugs: gremlin (its [RCA], sent to triage)
   closes_other_bugs: triage (its [CLOSE] outcome=duplicate|known_open|wont_fix|already_fixed|not_reproduced|escalated)
   watchdog: >-
@@ -193,11 +201,24 @@ agents:
       - GET /fixes
       - GET /budget/{bug_ref}
 
-# People in the room. Agents never act for them.
+# A program, not an agent: it links the two rooms and keeps the public thread short. docs/HERALD.md.
+herald:
+  what: tracesquad/herald.py, a deterministic Mattermost bot. It reads message headers only and never writes prose of its own.
+  does:
+    - "Opens a bug: a root post in the public room addressed to @triage gets a work-log thread with a [NEW BUG] to triage, and a status card in the reporter's thread."
+    - "Keeps the card current from the work log's headers: stage (Received, Investigating, Fixing, Verifying, Wrapping up, Done), who has it now, and evidence links to the exact work-log posts that carry an evidence: line, every [CLOSE] and every [RCA]."
+    - "Copies Triage's [PUBLIC] messages into the public thread, with user ids, pre-prod env names and service versions removed."
+    - "Sends anything people write in a bug's public thread to triage in the work log, as [FROM PUBLIC]."
+  run: scripts/herald.sh                    # uv run python -m tracesquad.herald run
+  config: ~/.tracesquad/herald.json         # Mattermost URL and the two channels; token in ~/.tracesquad/herald-token
+  needs: A Mattermost bot account that is a member of both channels.
+
+# People in the rooms. Agents never act for them.
 people:
-  reporter: Posts the bug with a user id. Only Triage talks to them.
-  fe_be_teams: Review and merge Atlas's PRs, own their features, and take over escalated bugs.
-  operator: Runs the API (scripts/serve.sh), sends triage "sweep" about every 10 minutes, resets between demos.
+  reporter: Posts the bug with a user id in the public room, addressed to triage. Only Triage talks to them, with [PUBLIC].
+  community: Anyone else in the public room. They see each bug's status card and Triage's [PUBLIC] messages; their replies reach Triage as [FROM PUBLIC].
+  fe_be_teams: Read the work log, review and merge Atlas's PRs, own their features, and take over escalated bugs.
+  operator: Runs the API (scripts/serve.sh) and the herald (scripts/herald.sh), sends triage "sweep" about every 10 minutes, resets between demos.
 
 # The message protocol every agent uses in a bug's thread. Full detail: docs/SYSTEM.md section 4.
 protocol:
@@ -211,7 +232,12 @@ protocol:
     NUDGE: Triage only, about a message nobody answered
     CLOSE: Triage only, closes a bug that didn't end in a fix (outcome=)
     RCA: Gremlin only, sent to Triage; closes a fixed bug
+    PUBLIC: Triage only, a plain message (no targets) the herald copies into the public thread; plain words, nothing internal
+    NEW BUG: The herald, to Triage; opens the bug's work-log thread with the report as posted
+    FROM PUBLIC: The herald, to Triage; what someone wrote in the bug's public thread
   rules:
+    - Work in the bug's work-log thread; never post in the public room.
+    - Don't post status updates; the herald's card shows the progress, built from the headers.
     - Read the thread before asking.
     - Ask the owner; answer only from your own area.
     - Never go quiet; every turn ends with an answer, a hand-off, or a [REPORT] to Triage.
@@ -258,11 +284,14 @@ mock_data:
   add_a_scenario: README.md, "Adding a scenario"
 
 deploy:
-  switch_template: switch/tracesquad.template.yaml   # version 2: creates the six agents and the room
-  room: tracesquad
+  switch_template: switch/tracesquad.template.yaml   # version 2: creates the six agents, both rooms and their group
+  rooms:
+    public: tracesquad                      # public channel; only triage is a member, and it never posts
+    work_log: tracesquad-worklog            # private channel; all six agents and the deployer
   agent_names_are_fixed: true   # prompts address each other by these names; they must be free on the server
   agents_get_this_repo: false   # never: data/ holds every scenario's answers
   needs_on_the_agents_machine: ~/.tracesquad/bin/tsq, and the API reachable (scripts/serve.sh)
+  herald: scripts/herald.sh, with a bot in both channels (docs/HERALD.md)
   after_prompt_changes: uv run python scripts/make_switch_template.py
   other_platforms:                          # see AGENTS.md
     claude_code: uv run python scripts/export_agents.py claude-code <project dir outside this repo>

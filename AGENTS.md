@@ -42,6 +42,10 @@ Every platform needs the same four things.
   that `export_agents.py claude-code` writes holds the exact rules: keep the thread, deliver each
   message to the agents in its `to=`, and never answer for an agent.
 - **A `sweep`:** something sends triage the word `sweep` about every 10 minutes while a bug is open.
+- **The herald's part** (optional): on Mattermost, [`docs/HERALD.md`](docs/HERALD.md) runs a bot that
+  keeps the public thread to a status card and Triage's messages while the squad works in a private
+  work log. Elsewhere, whoever runs the squad hands Triage each report as a `[NEW BUG]` and shows the
+  reporter Triage's `[PUBLIC]` messages.
 
 Then report a bug to triage, giving the report id, its text and the user id. The demo has five
 reports: `~/.tracesquad/bin/tsq GET /reports/RPT-101`, and so on up to `RPT-105`.

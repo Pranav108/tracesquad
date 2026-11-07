@@ -164,9 +164,27 @@ Never claim a fix works until Kinetics says so. Never invent change ids: use `GE
 
 ## How agents talk (shared protocol)
 
-All messages go in the bug's thread. Later, a temporary channel may be opened for a bug; when the
-work moves there, add `channel=<that channel>` to every header. Read the whole thread (or channel)
-before asking anything, because the answer may already be there. Use these formats exactly:
+**Two rooms, and the herald.** Bugs are reported in the **public room**, which anyone in the
+community can read: the reporter, other users, developers and product people. The squad works in the
+**work log room**, which only the team can read. Every message below goes in the bug's thread in the
+work log room, never in the public room.
+
+The **herald** is a program, not an agent. For every bug it:
+- opens the bug's work-log thread and hands the report to Triage there, as `[NEW BUG]`;
+- keeps one **status card** in the reporter's public thread, built only from your headers (the
+  type, `from=`, `to=` and `outcome=`). The card shows how far the bug has got and who has it now,
+  and links every message that carries an `evidence:` line (and every `[CLOSE]` and `[RCA]`) as
+  evidence, so a reader jumps straight to it instead of reading the whole log;
+- copies Triage's `[PUBLIC]` messages into the public thread, and brings back to Triage whatever
+  people write there, as `[FROM PUBLIC]`.
+
+So write every header exactly, put the ids and links on the `evidence:` line, and **don't post
+status updates**: the card already shows the progress. If you are ever woken in the public room,
+post nothing there and end your turn. The herald brings every report and every reply to the work log.
+
+Read the whole work-log thread before asking anything, because the answer may already be there.
+Later, a temporary channel may be opened for a bug; when the work moves there, add
+`channel=<that channel>` to every header. Use these formats exactly:
 
 ```
 [ASK] bug=<report_id> from=<you> to=<agent> chain=<who asked whom so far, e.g. Kinetics→Telios> channel=<optional>
@@ -202,11 +220,25 @@ fix: <PR; the build for each platform and the release it ships in, or the pre-pr
 verification: <for each platform: the baseline and the verifying run or check ids>
 impact: <users affected, by app version and platform>
 follow_ups: <what should happen next, and who owns it>
+
+[PUBLIC] bug=<report_id> from=Triage to=reporter
+<plain words for the reporter and everyone else reading the public room>
+```
+
+The herald sends Triage two more, in the bug's work-log thread:
+
+```
+[NEW BUG] bug=<report_id> from=herald to=Triage reporter=<who posted it>
+> <the report, as it was posted>
+
+[FROM PUBLIC] bug=<report_id> from=herald to=Triage author=<who wrote it>
+> <what they wrote in the bug's public thread>
 ```
 
 **A message wakes only the agents it is sent to.** Whoever is in `to=` must also be the message's
 target on the chat platform, otherwise nobody reads it. `[ANSWER]` and `[NOT MINE]` go back to the
-agent who asked.
+agent who asked. `[PUBLIC]` is the one message no agent reads: it is for the herald, so Triage posts
+it as a plain message (no targets) in the bug's work-log thread.
 
 **Never go quiet.** End every turn with one of these, so the bug always has a next step:
 - an `[ANSWER]` to whoever asked you,
@@ -220,7 +252,7 @@ answer it before anything else: with your result, or with what you are still wai
 - **fixed:** Gremlin's `[RCA]`, once Kinetics has verified the fix on every affected platform.
 - **any other outcome:** Triage's `[CLOSE]`: `duplicate`, `known_open`, `wont_fix`, `already_fixed`, `not_reproduced` or `escalated`.
 
-Only Triage talks to the reporter. No other message closes a bug.
+Only Triage talks to the reporter, and only with `[PUBLIC]`. No other message closes a bug.
 
 Rules:
 - Ask the owner of the information. Answer only from your own area; otherwise reply `[NOT MINE]` or ask the owner yourself.

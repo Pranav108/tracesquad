@@ -168,3 +168,37 @@ def test_backend_fixes_name_their_env():
     assert "preprod_env" in (PROMPTS / "espida.md").read_text()
     assert "A budget is used up" in (PROMPTS / "triage.md").read_text()
     assert "quotes what the run showed" in (PROMPTS / "telios.md").read_text()
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_protocol_has_the_two_rooms_and_the_herald(agent):
+    text = (PROMPTS / f"{agent}.md").read_text()
+    assert "**public room**" in text and "**work log room**" in text and "**herald**" in text
+    assert "[PUBLIC] bug=<report_id> from=Triage to=reporter" in text
+    assert "Only Triage talks to the reporter, and only with `[PUBLIC]`." in text
+    assert "don't post\nstatus updates" in text and "post nothing there and end your turn" in text
+
+
+@pytest.mark.parametrize("agent", AGENTS)
+def test_the_herald_reads_every_header_the_protocol_teaches(agent):
+    """The card is built from headers, so every format in the prompts must parse to its own type."""
+    from tracesquad.herald import parse_message
+
+    text = (PROMPTS / f"{agent}.md").read_text()
+    protocol = text.split("## How agents talk (shared protocol)", 1)[1]
+    headers = re.findall(r"^\[([A-Z ]+)\] bug=<report_id>.*$", protocol, re.MULTILINE)
+    assert set(headers) == {
+        "ASK", "ANSWER", "NOT MINE", "CLAIM", "REPORT", "NUDGE", "CLOSE", "RCA", "PUBLIC", "NEW BUG", "FROM PUBLIC"
+    }
+    for line in re.findall(r"^\[[A-Z ]+\] bug=<report_id>.*$", protocol, re.MULTILINE):
+        msg = parse_message(line)
+        assert msg is not None and line.startswith(f"[{msg.type}]") and msg.bug == "<report_id>"
+
+
+def test_triage_talks_to_the_reporter_in_plain_words():
+    triage = (PROMPTS / "triage.md").read_text()
+    assert "## Talking to the reporter" in triage
+    assert "never holds internal details" in triage and "pre-prod env names" in triage
+    assert "Don't send an acknowledgement or progress updates" in triage
+    assert "**Post a status**" not in triage, "the herald's card replaced Triage's status posts"
+    assert "other than your own `[PUBLIC]`" in triage, "a [PUBLIC] is not a dropped hand-off"

@@ -112,7 +112,7 @@ confidence: high
 ```
 
 - **`[ASK]`, `[ANSWER]`, `[NOT MINE]`, `[CLAIM]`, `[REPORT]`:** any agent.
-- **`[NUDGE]`, `[CLOSE]`:** Triage only.
+- **`[NUDGE]`, `[CLOSE]`, `[PUBLIC]`:** Triage only. `[PUBLIC]` is how Triage talks to the reporter.
 - **`[RCA]`:** Gremlin only.
 
 The rules that hold it together:
@@ -120,6 +120,22 @@ The rules that hold it together:
 - A message wakes only the agents it's addressed to.
 - Nobody goes quiet: every turn ends with an answer, a hand-off, or a report to Triage.
 - Every fact cites the API call, log, trace, run or check it came from.
+
+### What the reporter sees
+
+Working one bug can take the squad 30 or 40 messages. That's too many for a public room where anyone
+in the community, the reporter included, wants to know what's happening. So the squad works in a
+private **work log** room, and the reporter's thread holds just two things:
+
+- **A status card**, posted within seconds and edited in place: Received → Investigating → Fixing →
+  Verifying → Wrapping up → Done, who has the bug now, and evidence links (the reproduction, the
+  logs, the fix, the verification, the RCA). Each link opens the exact message in the work log, so
+  developers jump straight to it instead of reading the whole thread.
+- **Triage's messages**, in plain words: a question only the reporter can answer, and the outcome.
+
+The **herald**, a small bot in [`tracesquad/herald.py`](tracesquad/herald.py), links the two rooms.
+It builds the card only from the message headers above, so it never repeats an agent's internal
+notes in public. See [docs/HERALD.md](docs/HERALD.md).
 
 [docs/SYSTEM.md](docs/SYSTEM.md) explains all of it, with a step-by-step sequence diagram for each
 scenario.
@@ -151,17 +167,19 @@ scripts/serve.sh                              # API on http://127.0.0.1:8095; in
 **2. Create the agents.** Run them on the same machine, from a folder outside this repo.
 
 - **On [Switch](https://github.com/sandbox-quantum/switch):** tell switch-buddy "Set up the squad from
-  https://github.com/Pranav108/tracesquad". It follows [SWITCH.md](SWITCH.md) and creates the six agents
-  and a `tracesquad` room in one go.
+  https://github.com/Pranav108/tracesquad". It follows [SWITCH.md](SWITCH.md) and creates the six agents,
+  the public `tracesquad` room and the private `tracesquad-worklog` room in one go. Then start the
+  herald, which needs a Mattermost bot in both rooms: [docs/HERALD.md](docs/HERALD.md).
 - **In Claude Code:** `uv run python scripts/export_agents.py claude-code ~/tracesquad-run`, then open
   Claude Code in `~/tracesquad-run`.
 - **Anywhere else:** `uv run python scripts/export_agents.py json squad.json`, then follow [AGENTS.md](AGENTS.md).
 
 **3. Report a bug.**
 
-- **In a room (Switch):** post the report to triage, e.g. "triage, new bug RPT-102: Checkout shows
-  'Something went wrong' right after I apply a coupon. user U-77105". About every 10 minutes, send triage
-  `sweep` so it can nudge stuck bugs.
+- **In a room (Switch):** post the report in the public room to @triage, e.g. "@triage new bug RPT-102:
+  Checkout shows 'Something went wrong' right after I apply a coupon. user U-77105". A status card
+  appears in your thread. About every 10 minutes, send triage `sweep` in the work log so it can nudge
+  stuck bugs.
 - **In Claude Code:** run `/tracesquad <the same text>`.
 
 **4. Check the agents' work.**
@@ -194,10 +212,12 @@ The details are in [SWITCH.md](SWITCH.md#how-agents-find-the-api).
 | [`SWITCH.md`](SWITCH.md) | Deploying on Switch, and how `tsq` finds the API |
 | [`docs/SYSTEM.md`](docs/SYSTEM.md) | How the system works, with flow diagrams |
 | [`docs/API.md`](docs/API.md) | The mock API: every endpoint, errors, and what agents never see |
+| [`docs/HERALD.md`](docs/HERALD.md) | The herald: the public status card, the private work log, and how to set it up |
 | [`switch/tracesquad.template.yaml`](switch/tracesquad.template.yaml) | The Switch template (generated) |
 | [`tracesquad/`](tracesquad), [`data/`](data) | The API (FastAPI) and its mock data |
 | [`bin/tsq`](bin/tsq) | The client agents call the API with |
-| [`scripts/`](scripts) | `serve.sh`, `install-client.sh`, `make_switch_template.py`, `export_agents.py` |
+| [`tracesquad/herald.py`](tracesquad/herald.py) | The herald (a Mattermost bot that links the public room and the work log) |
+| [`scripts/`](scripts) | `serve.sh`, `herald.sh`, `install-client.sh`, `make_switch_template.py`, `export_agents.py` |
 
 ## Development
 

@@ -7,13 +7,17 @@ call, and how the agents reach the mock API without anyone ever pasting a URL.
 - **The structure, machine-readable:** [`squad.yaml`](squad.yaml). It lists the agents, what each one
   owns, who asks whom, the endpoints each one calls, the protocol, the mock data and the deploy settings.
 - **The template:** [`switch/tracesquad.template.yaml`](switch/tracesquad.template.yaml) (`version: 2`).
-  It creates the six agents and their room.
+  It creates the six agents, the public room bugs are reported in, and the private work log they work in.
+- **The herald:** [`docs/HERALD.md`](docs/HERALD.md). A small bot that links the two rooms and keeps
+  each bug's public thread down to a status card and Triage's messages.
 - **The whole story, for people:** [`docs/SYSTEM.md`](docs/SYSTEM.md).
 
 ## The squad at a glance
 
-Six agents work bugs reported in one room. Nobody coordinates them and there is no fixed pipeline. Each
-agent owns one area and asks the others directly, in the bug's thread.
+Six agents work bugs that people report in a public room. Nobody coordinates them and there is no fixed
+pipeline. Each agent owns one area and asks the others directly, in the bug's thread in a private
+**work log** room. The **herald** (a bot, not an agent) opens that thread, keeps a status card in the
+reporter's public thread, and copies Triage's `[PUBLIC]` messages to the reporter.
 
 | Agent | Job | Mostly asks |
 |---|---|---|
@@ -26,7 +30,9 @@ agent owns one area and asks the others directly, in the bug's thread.
 
 ```mermaid
 flowchart LR
-    reporter(["Reporter"]) -- "bug + user id" --> triage
+    reporter(["Reporter<br/>(public room)"]) -- "bug + user id" --> herald{{"herald"}}
+    herald -- "[NEW BUG] (work log)" --> triage
+    herald -. "status card" .-> reporter
     triage -- "known? who? which layer?" --> espida
     triage -- "set up a repro" --> telios --> kinetics
     kinetics -- "reproduced" --> atlas
@@ -35,14 +41,16 @@ flowchart LR
     kinetics -- "verified" --> atlas
     atlas -- "verified fix" --> gremlin
     gremlin -- "[RCA]" --> triage
-    triage -- "fixed / closed" --> reporter
+    triage -- "[PUBLIC]: fixed / closed" --> herald
 ```
 
 That is the usual path, not a rule: any agent may ask any other (`asks:` in `squad.yaml` lists who
 asks whom for what). The protocol rules:
 
 - Every message is one of `[ASK]`, `[ANSWER]`, `[NOT MINE]`, `[CLAIM]`, `[REPORT]`, `[NUDGE]`,
-  `[CLOSE]` or `[RCA]`, with a header such as `bug=RPT-102 from=Telios to=Triage`.
+  `[CLOSE]`, `[RCA]` or Triage's `[PUBLIC]`, with a header such as `bug=RPT-102 from=Telios to=Triage`.
+  The herald builds the public status card from these headers.
+- Agents work only in the work log. They never post in the public room, even when woken there.
 - In Switch, a message wakes only the agents in its `target_names` (`send_targeted_message`, in the
   bug's thread). Every agent's instructions already say so.
 - Nobody goes quiet: every turn ends with an answer, a hand-off, or a `[REPORT]` to Triage.
@@ -64,15 +72,17 @@ Your own rules still apply: propose first, and create nothing without a yes.
    - Agents on a different machine (a cloud machine, say) need one more step: see
      [Agents on another machine](#agents-on-another-machine).
 3. **Check that the names are free.** The template creates agents named `triage`, `telios`,
-   `kinetics`, `espida`, `atlas` and `gremlin`, and a room named `tracesquad`. Look at
-   `list_managed_agents` and `list_rooms`. If any of these already exist, say so and let the person
+   `kinetics`, `espida`, `atlas` and `gremlin`, rooms named `tracesquad` and `tracesquad-worklog`,
+   and a room group named `TraceSquad`. Look at `list_managed_agents` and `list_rooms`. If any of these already exist, say so and let the person
    delete them first. Don't rename anything: the agents address each other by these names.
 4. **Propose it in one message**, and wait for a yes:
    - the six agents, one line each, from the table above;
    - where they run (it must be the machine that runs the API, unless they set up another machine),
      and which coding agent (Claude first, else Codex);
    - whether they **ask before risky commands** (the default) or run without asking (bypass);
-   - which messaging app the `tracesquad` room goes on.
+   - which messaging app the rooms go on (the herald needs Mattermost): `tracesquad` (public, only
+     triage in it so `@triage` resolves) and `tracesquad-worklog` (private, all six and the person);
+   - that the person (or a Mattermost admin) sets up the herald afterwards: [`docs/HERALD.md`](docs/HERALD.md).
 5. **Create it**, everything in one call: `create_room_from_yaml` with `yaml` set to the full text
    of `switch/tracesquad.template.yaml` and these `inputs`, each optional:
 
@@ -85,15 +95,19 @@ Your own rules still apply: propose first, and create nothing without a yes.
 
    If they want it among their templates, `save_template` it (name `TraceSquad`) and use
    `run_template` instead. The template has no warnings, so `save_template` takes it as it is.
-6. **Check it.** `list_managed_agents` should show all six. The kickoff asks each agent to call
-   `tsq GET /health` and say hello. An agent that reports the API didn't answer means step 2 isn't
-   done on its machine.
-7. **Tell the person how to use it**, briefly:
-   - **Report a bug:** post in the room, addressed to triage, with the report id and its text. For
-     example: "triage, new bug RPT-102: Checkout shows 'Something went wrong' right after I apply a
-     coupon. user U-77105". `~/.tracesquad/bin/tsq GET /reports/RPT-101` (up to `RPT-105`) prints a
-     report to paste.
-   - **Keep the sweep going:** send triage `sweep` about every 10 minutes while a bug is open.
+6. **Check it.** `list_managed_agents` should show all six. The kickoff, in the work log, asks each
+   agent to call `tsq GET /health` and say hello. An agent that reports the API didn't answer means
+   step 2 isn't done on its machine.
+7. **The herald.** It needs a Mattermost bot in both channels, which takes a Mattermost admin: hand the
+   person [`docs/HERALD.md`](docs/HERALD.md). Without the herald nothing reaches the work log, so no
+   bug gets worked.
+8. **Tell the person how to use it**, briefly:
+   - **Report a bug:** post in the public room, addressed to @triage, with the report id and its
+     text. For example: "@triage new bug RPT-102: Checkout shows 'Something went wrong' right after I
+     apply a coupon. user U-77105". `~/.tracesquad/bin/tsq GET /reports/RPT-101` (up to `RPT-105`)
+     prints a report to paste. A status card appears in the thread within seconds.
+   - **Follow the work:** the card's evidence links and its work-log link open the private work log.
+   - **Keep the sweep going:** send @triage `sweep` in the work log about every 10 minutes while a bug is open.
    - **Reset between demos:** `~/.tracesquad/bin/tsq POST /sandbox/reset`, or restart the API.
 
 ### Never do these
@@ -167,5 +181,9 @@ pinned address has to be changed by hand after each restart.
 - **Agents that already exist:** give each one its new instructions with `update_agent_detail`,
   using that agent's `instructions` from the regenerated template. Or delete the six and run the
   template again.
+- **A squad deployed with one room** (before the work log): keep that room as the public room. Create a
+  private room for the work log with the six agents and the people on the team, give both rooms the
+  `instructions` of `public_room` and `work_log_room` from the template, update each agent's
+  instructions, and set up the herald with the two channels.
 - **A new agent:** add its prompt in `prompts/`, add an entry in `squad.yaml` (with its `asks:` and
   `api:`), add its name to every other prompt's team table, and regenerate the template.

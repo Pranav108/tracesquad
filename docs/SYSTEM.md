@@ -299,9 +299,45 @@ All of the above are left out of `/openapi.json`, and no prompt mentions them.
 
 ## 4. How the agents talk
 
-All conversation happens **in the bug's Slack thread**. Agents never call each other directly. They
-post a message addressed to another agent, and that agent replies in the thread. Every message uses
-one of eight formats:
+### Two rooms and the herald
+
+People report bugs in a **public room** that anyone in the community can read. Working one bug takes
+the squad dozens of messages, and putting them all in the reporter's thread buries the answer. So the
+squad works in a second room, the **work log**: a private channel only the team can read.
+
+The **herald** links the two ([HERALD.md](HERALD.md)). It is a bot, not an agent: it reads headers
+and never writes prose of its own.
+
+```mermaid
+flowchart LR
+    subgraph public["Public room (anyone)"]
+        report["Reporter's post<br/>@triage new bug RPT-101 …"]
+        card["Status card<br/>(edited in place)"]
+        said["Triage: …"]
+    end
+    subgraph log["Work log (team only)"]
+        thread["The bug's thread<br/>[NEW BUG], then every<br/>[ASK] [REPORT] … [RCA]"]
+    end
+    report -- "herald: [NEW BUG] to triage" --> thread
+    thread -- "herald: headers → stage,<br/>who has it, evidence links" --> card
+    thread -- "herald: Triage's [PUBLIC]" --> said
+    card -. "evidence and work-log links<br/>open the exact post" .-> thread
+```
+
+| Who | Reads |
+|---|---|
+| The reporter, anyone in the community | The card and Triage's `[PUBLIC]` messages |
+| Developers, product | The card's evidence links, each straight to the message that carries it |
+| Anyone checking how the squad got there | The bug's whole work-log thread |
+
+Agents never post in the public room. Replies people write in a bug's public thread reach Triage in
+the work log as `[FROM PUBLIC]`.
+
+### Messages
+
+All conversation happens **in the bug's thread in the work log**. Agents never call each other
+directly. They post a message addressed to another agent, and that agent replies in the thread.
+Every message uses one of these formats:
 
 | Message | Who sends it | Used for | Shape |
 |---|---|---|---|
@@ -313,6 +349,11 @@ one of eight formats:
 | `[NUDGE]` | **Triage only** | Reminding an agent of a message it hasn't answered | `waiting_for:` the message and when it was sent |
 | `[CLOSE]` | **Triage only** | Closing a bug that didn't end in a fix | `outcome=`, then `summary:`, `owner:`, `evidence:` |
 | `[RCA]` | **Gremlin only**, sent to Triage | The final write-up, which closes a fixed bug | `what_happened:`, `root_cause:`, `fix:`, `verification:`, `impact:`, `follow_ups:` |
+| `[PUBLIC]` | **Triage only**, a plain message | Talking to the reporter: a question only they can answer, or the outcome. The herald copies it into the public thread | Plain words; never ids, env names, service versions or work-log links |
+| `[NEW BUG]` | **The herald**, to Triage | Opens the bug's work-log thread with the report as posted | `reporter=`, then the report quoted |
+| `[FROM PUBLIC]` | **The herald**, to Triage | What someone wrote in the bug's public thread | `author=`, then their words quoted |
+
+Nobody posts status updates: the herald's card shows the progress, built from these headers.
 
 **Ready for temporary channels.** Every header can carry `channel=<channel>`. In the future, a bug's
 discussion can move to a temporary channel. Gremlin then posts the `[RCA]` there **and** back in the
@@ -752,19 +793,22 @@ The same pattern covers the other dead ends:
    [`SWITCH.md`](../SWITCH.md)). Elsewhere, paste each `prompts/<agent>.md` as the system prompt and give
    the agent a shell where `tsq` works. Re-run `uv run python scripts/make_switch_template.py` after
    editing a prompt or `squad.yaml`.
-3. **Play the reporter.** Post a report's text in the channel, e.g. the text of `GET /reports/RPT-102`.
-4. **Keep the sweep going.** About every 10 minutes, send Triage `sweep` (in Switch: a message
-   addressed to triage). Do it by hand, with a scheduled post on the chat platform, or with a cron job
+3. **Start the herald:** `scripts/herald.sh`, with a Mattermost bot in both rooms
+   ([HERALD.md](HERALD.md)). Without it, reports never reach the work log.
+4. **Play the reporter.** Post a report's text in the public room addressed to @triage, e.g. the text of
+   `GET /reports/RPT-102`. The status card appears in your thread within seconds.
+5. **Keep the sweep going.** About every 10 minutes, send Triage `sweep` (in Switch: a message
+   addressed to triage in the work log). Do it by hand, with a scheduled post on the chat platform, or with a cron job
    posting through a webhook. Without it, a stalled bug waits until something else wakes Triage.
-5. **Let the agents run.** They reproduce the bug, fix it, verify the fix and close it with an `[RCA]`,
+6. **Let the agents run.** They reproduce the bug, fix it, verify the fix and close it with an `[RCA]`,
    or close it with a `[CLOSE]` when it ends another way. The operator no longer deploys or publishes
    fixes for new bugs.
-6. **Check their work** (with `~/.tracesquad/bin/tsq`):
+7. **Check their work** (with `~/.tracesquad/bin/tsq`):
    - `GET /admin/scenarios/<id>` has the expected class and path.
    - `GET /rca/<report_id>`, `GET /prds/<id>` and `GET /threads/<id>` show what Gremlin wrote.
    - `GET /fixes?bug_ref=<report_id>` shows Atlas's attempts, their culprits, platforms, builds and pre-prod envs.
    - `GET /budget/<report_id>` shows how much of the bug's budget the agents used.
-7. **Reset between runs:** `POST /sandbox/reset` clears mock users, logs, Atlas's builds and pre-prod envs, API checks, budgets, and Gremlin's writes.
+8. **Reset between runs:** `POST /sandbox/reset` clears mock users, logs, Atlas's builds and pre-prod envs, API checks, budgets, and Gremlin's writes.
    Several bugs can run at the same time: each backend fix has its own env, each bug has its own
    budget, and runs only judge their own bug.
 

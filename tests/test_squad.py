@@ -59,7 +59,7 @@ def test_asks_edges_point_at_other_agents(name):
 
 def test_topology_names_real_agents():
     topology = SQUAD["topology"]
-    assert topology["owner_of_every_bug"] in AGENTS and topology["talks_to_reporter"] in AGENTS
+    assert topology["owner_of_every_bug"] in AGENTS and topology["talks_to_reporter"].split()[0] in AGENTS
     assert topology["closes_fixed_bugs"].split()[0] in AGENTS
     assert topology["closes_other_bugs"].split()[0] in AGENTS
 
@@ -89,12 +89,23 @@ def test_template_creates_the_squad_and_its_room():
         assert agent["name"] == key
         assert agent["provider"] and agent["machine"] and agent["directory"] and agent["instructions"]
         assert agent["addressing"] == "anyone"
-    rooms = [v for v in resources.values() if v["type"] == "room"]
-    assert len(rooms) == 1
-    room = rooms[0]
-    assert room["name"] == SQUAD["deploy"]["room"] and set(room["agents"]) == set(AGENTS)
+    rooms = {k: v for k, v in resources.items() if v["type"] == "room"}
+    assert set(rooms) == {"public_room", "work_log_room"}
+    public, work_log = rooms["public_room"], rooms["work_log_room"]
+    assert public["name"] == SQUAD["deploy"]["rooms"]["public"]
+    assert work_log["name"] == SQUAD["deploy"]["rooms"]["work_log"]
+    # The squad works only in the private work log; the public room holds triage so @triage resolves.
+    assert set(work_log["agents"]) == set(AGENTS) and work_log["channel_type"] == "channel_private"
+    assert public["agents"] == ["triage"] and public["channel_type"] == "channel_public"
+    assert "Agents never post in this room" in public["instructions"] and "kickoff" not in public
     for name in AGENTS:
-        assert f"@{{{name}.name}}" in room["kickoff"]
+        assert f"@{{{name}.name}}" in work_log["kickoff"]
+    # Switch puts several rooms in one group, and every room names it.
+    (group_key,) = [k for k, v in resources.items() if v["type"] == "group"]
+    assert all(room["group"] == group_key for room in rooms.values())
+    assert resources[group_key]["links"] == [
+        {"from": "public_room", "to": "work_log_room", "label": "the work log for these bugs (team only)"}
+    ]
 
 
 def test_template_never_gives_agents_the_repo_or_a_url():
