@@ -224,12 +224,33 @@ def test_a_report_opens_a_work_log_thread_and_a_card(mm, herald):
     assert "📥 **Received**" in card(mm, bug) and "http://mm.test/switch/pl/" + bug.work_log_root_id in card(mm, bug)
 
 
-def test_only_reports_to_triage_open_bugs(mm, herald):
-    mm.post("c-public", "u-rep", "Is anyone else seeing slow menus today?")
+def test_every_top_level_post_is_a_report_without_tagging_anyone(mm, herald):
+    root = mm.post("c-public", "u-rep", "Checkout shows 'Something went wrong' after I apply a coupon")
+    herald.poll_once()
+    bug = herald.state.bugs[root]
+    assert bug.report_id == f"FB-{root[:6]}", "no report id in the text: the herald makes one from the post"
+    opener = mm.posts[bug.work_log_root_id]["message"]
+    assert opener.startswith(f"@triage [NEW BUG] bug={bug.report_id} from=herald to=Triage reporter=user\n> Checkout")
+    assert [p["id"] for p in mm.thread(root)] == [bug.card_post_id]
+
+
+def test_switch_accounts_agents_and_protocol_posts_are_not_reports(mm, herald):
     mm.post("c-public", "u-admin", "@Triage hello from Switch")
     mm.post("c-public", "u-rep", "[REPORT] bug=RPT-9 from=Kinetics to=Atlas")
+    mm.users["u-atlas"] = "atlas"
+    mm.post("c-public", "u-atlas", "Looking into it")
     herald.poll_once()
     assert herald.state.bugs == {}
+
+
+def test_require_mention_opens_bugs_only_for_posts_that_tag_triage(mm, config):
+    config.require_mention = True
+    herald = Herald(mm, config, now=lambda: mm.clock / 1000)
+    herald.start()
+    mm.post("c-public", "u-rep", "Is anyone else seeing slow menus today?")
+    tagged = mm.post("c-public", "u-rep", "@Triage new bug RPT-101: the app shows 'Join Gold'")
+    herald.poll_once()
+    assert list(herald.state.bugs) == [tagged]
 
 
 def test_the_card_follows_the_work_log(mm, herald):

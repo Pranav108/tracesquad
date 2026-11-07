@@ -14,7 +14,8 @@ FastAPI app (`tracesquad/api.py`). Nothing in it is real.
 
 | Used by | Method & path | Returns |
 |---|---|---|
-| Triage | `GET /reports/{report_id}` | A Slack bug report |
+| Triage | `GET /reports/{report_id}` | A bug report: a prepared one (`RPT-101` to `RPT-105`) or a filed one |
+| Triage | `POST /reports` `{report_id, user_id, text, reporter}` | Files a community post under its herald id (`FB-…`), so runs, fixes, budgets and the RCA work for it. It reproduces whatever is wrong with that user's account. 409 if already filed |
 | Triage | `GET /known-bugs`, `GET /known-bugs/{bug_id}` | Bugs already in the bug database |
 | Triage | `GET /users/{user_id}` | Profile: platform, app version, device, city, group, plan, cohort |
 | Triage | `GET /users/{user_id}/journey` | What the user did, in order |

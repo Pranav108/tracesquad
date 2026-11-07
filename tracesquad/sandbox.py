@@ -6,12 +6,13 @@ or on POST /sandbox/reset.
 
 import re
 from collections import Counter
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
 
 from tracesquad.errors import ApiError
-from tracesquad.models import Build, LogEntry
+from tracesquad.models import Build, LogEntry, Report
 from tracesquad.store import DataError, Store, parse_cohort_id
 
 
@@ -26,6 +27,8 @@ class MockUser(BaseModel):
 
 
 _ATLAS_SUFFIX = re.compile(r"-atlas-\d+$")
+# A report id: RPT-123 from the bug tracker, or FB-1a2b3c, which the herald gives a community post.
+REPORT_ID = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,9}-[A-Za-z0-9]{1,32}$")
 
 
 def base_version(version: str) -> str:
@@ -72,6 +75,8 @@ class Sandbox:
         self.reset()
 
     def reset(self) -> None:
+        # reports Triage filed from the community room (POST /reports), next to the prepared ones
+        self.filed_reports: dict[str, Report] = {}
         self.users: dict[str, MockUser] = {}
         self.logs: list[LogEntry] = []
         # shared pre-prod: the unfixed baseline; only the operator deploys to it
@@ -92,6 +97,31 @@ class Sandbox:
         self.thread_replies: dict[str, list[dict[str, Any]]] = {}
         self.rcas: dict[str, dict[str, Any]] = {}
         self._check_seq = 0
+
+    def report(self, report_id: str) -> Report | None:
+        """A prepared report, or one Triage filed from the community room."""
+        return self.store.reports.get(report_id) or self.filed_reports.get(report_id)
+
+    def file_report(self, report_id: str, user_id: str, text: str, reporter: str, channel: str, posted_at: datetime) -> Report:
+        """File a report posted in the community room, under the id the herald gave it.
+
+        The sandbox replays the user's own account, so the report reproduces whatever is wrong there.
+        """
+        if not REPORT_ID.match(report_id):
+            raise ApiError(422, f"'{report_id}' is not a report id: use the bug= id from the thread, e.g. FB-1a2b3c or RPT-123")
+        if self.report(report_id) is not None:
+            raise ApiError(409, f"report '{report_id}' is already filed; GET /reports/{report_id}")
+        if user_id not in self.store.users:
+            raise ApiError(404, f"user '{user_id}' not found")
+        scenario_id = next((r.scenario_id for r in self.store.reports.values() if r.user_id == user_id), None)
+        if scenario_id is None:
+            raise ApiError(422, f"user '{user_id}' has no account history in this sandbox to reproduce against")
+        report = Report(
+            report_id=report_id, scenario_id=scenario_id, channel=channel, posted_at=posted_at,
+            reporter=reporter, user_id=user_id, text=text,
+        )
+        self.filed_reports[report_id] = report
+        return report
 
     def create_user(self, cohort_id: str) -> MockUser:
         try:

@@ -80,8 +80,9 @@ Your own rules still apply: propose first, and create nothing without a yes.
    - where they run (it must be the machine that runs the API, unless they set up another machine),
      and which coding agent (Claude first, else Codex);
    - whether they **ask before risky commands** (the default) or run without asking (bypass);
-   - which messaging app the rooms go on (the herald needs Mattermost): `tracesquad` (public, only
-     triage in it so `@triage` resolves) and `tracesquad-worklog` (private, all six and the person);
+   - which messaging app the rooms go on (the herald needs Mattermost): `tracesquad` (public, where
+     every new post is a bug report; only triage is in it, and it never posts there) and
+     `tracesquad-worklog` (private, all six and the person);
    - that the person (or a Mattermost admin) sets up the herald afterwards: [`docs/HERALD.md`](docs/HERALD.md).
 5. **Create it**, everything in one call: `create_room_from_yaml` with `yaml` set to the full text
    of `switch/tracesquad.template.yaml` and these `inputs`, each optional:
@@ -102,10 +103,11 @@ Your own rules still apply: propose first, and create nothing without a yes.
    person [`docs/HERALD.md`](docs/HERALD.md). Without the herald nothing reaches the work log, so no
    bug gets worked.
 8. **Tell the person how to use it**, briefly:
-   - **Report a bug:** post in the public room, addressed to @triage, with the report id and its
-     text. For example: "@triage new bug RPT-102: Checkout shows 'Something went wrong' right after I
-     apply a coupon. user U-77105". `~/.tracesquad/bin/tsq GET /reports/RPT-101` (up to `RPT-105`)
-     prints a report to paste. A status card appears in the thread within seconds.
+   - **Report a bug:** write a new post in the public room. Every new post there is a bug report and
+     replies are the discussion, so nobody needs to tag anyone. Include the user id. For example:
+     "Checkout shows 'Something went wrong' right after I apply a coupon. user U-77105".
+     `~/.tracesquad/bin/tsq GET /reports/RPT-101` (up to `RPT-105`) prints a demo report to paste. A
+     status card appears in the thread within seconds.
    - **Follow the work:** the card's evidence links and its work-log link open the private work log.
    - **Keep the sweep going:** send @triage `sweep` in the work log about every 10 minutes while a bug is open.
    - **Reset between demos:** `~/.tracesquad/bin/tsq POST /sandbox/reset`, or restart the API.

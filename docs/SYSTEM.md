@@ -120,7 +120,7 @@ restart.
 
 | Data | What it holds | Endpoint | Used by |
 |---|---|---|---|
-| Reports | The Slack message: text, user id, time, attachments | `GET /reports/{report_id}` | Triage |
+| Reports | The bug report: text, user id, time, attachments. Five are prepared (`RPT-101` to `RPT-105`); Triage files community posts under their herald id | `GET /reports/{report_id}`, `POST /reports` | Triage |
 | Known bugs | The bug database: status (`open`, `fixed`, `wont_fix`), affected platforms, versions and OS, `fixed_in`, thread link, error signature | `GET /known-bugs` | Triage |
 | User profiles | Platform, app version, device, city, area, group, plan, cohort | `GET /users/{user_id}` | Everyone |
 | Journeys | What the user did, in order (screen, action, params) | `GET /users/{user_id}/journey` | Everyone |
@@ -311,7 +311,7 @@ and never writes prose of its own.
 ```mermaid
 flowchart LR
     subgraph public["Public room (anyone)"]
-        report["Reporter's post<br/>@triage new bug RPT-101 …"]
+        report["Reporter's post<br/>(any new post is a report)"]
         card["Status card<br/>(edited in place)"]
         said["Triage: …"]
     end
@@ -795,8 +795,9 @@ The same pattern covers the other dead ends:
    editing a prompt or `squad.yaml`.
 3. **Start the herald:** `scripts/herald.sh`, with a Mattermost bot in both rooms
    ([HERALD.md](HERALD.md)). Without it, reports never reach the work log.
-4. **Play the reporter.** Post a report's text in the public room addressed to @triage, e.g. the text of
-   `GET /reports/RPT-102`. The status card appears in your thread within seconds.
+4. **Play the reporter.** Post a report's text as a new post in the public room, e.g. the text of
+   `GET /reports/RPT-102`. No tag is needed: every new post there is a report. The status card appears
+   in your thread within seconds, and Triage files the post in the API under the card's id.
 5. **Keep the sweep going.** About every 10 minutes, send Triage `sweep` (in Switch: a message
    addressed to triage in the work log). Do it by hand, with a scheduled post on the chat platform, or with a cron job
    posting through a webhook. Without it, a stalled bug waits until something else wakes Triage.

@@ -75,7 +75,8 @@ Bug report: $ARGUMENTS
    start it with `scripts/serve.sh` in a clone of the TraceSquad repo.
 2. **Keep the thread:** an ordered list of every message. It starts with the bug report, written as the
    herald would hand it over: `[NEW BUG] bug=<report id> from=herald to=Triage reporter=user`, then the
-   report on the next line.
+   report on the next line. The report id is the `RPT-…` id the report names, or, if it names none,
+   `FB-` and 6 random lowercase letters and digits (Triage files it in the API under that id).
 3. **Start:** run the `triage` subagent with the thread.
 4. **Deliver, until the bug ends:** from each reply, take every protocol message (a block that starts
    with `[ASK]`, `[ANSWER]`, `[NOT MINE]`, `[CLAIM]`, `[REPORT]`, `[NUDGE]`, `[CLOSE]`, `[RCA]` or `[PUBLIC]`) and

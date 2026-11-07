@@ -55,9 +55,31 @@ admin = APIRouter(
 )
 
 
-@triage.get("/reports/{report_id}", summary="A Slack bug report")
+def _report(request: Request, report_id: str):
+    report = request.app.state.sandbox.report(report_id)
+    if report is None:
+        raise ApiError(404, f"report '{report_id}' not found")
+    return report
+
+
+@triage.get("/reports/{report_id}", summary="A bug report")
 def get_report(report_id: str, request: Request) -> dict[str, Any]:
-    report = _get(_store(request).reports, report_id, "report")
+    return _report(request, report_id).model_dump(mode="json", exclude={"scenario_id"})
+
+
+class NewReport(BaseModel):
+    report_id: str
+    user_id: str
+    text: str
+    reporter: str
+    channel: str = "#community"
+
+
+@triage.post("/reports", status_code=201, summary="File a report posted in the community room, under its bug= id")
+def file_report(body: NewReport, request: Request) -> dict[str, Any]:
+    report = request.app.state.sandbox.file_report(
+        body.report_id, body.user_id, body.text, body.reporter, body.channel, _now_ist()
+    )
     return report.model_dump(mode="json", exclude={"scenario_id"})
 
 
@@ -398,7 +420,7 @@ def post_thread_reply(thread_id: str, body: ThreadReply, request: Request) -> di
 
 @gremlin.post("/rca", summary="Store the final RCA for a bug (report id)")
 def post_rca(body: Rca, request: Request) -> dict[str, Any]:
-    _get(_store(request).reports, body.bug_ref, "report")
+    _report(request, body.bug_ref)
     rca = body.model_dump(mode="json")
     _sandbox(request).rcas[body.bug_ref] = rca
     return rca
@@ -432,7 +454,7 @@ budget = APIRouter(tags=["Everyone: per-bug budgets"])
 
 @budget.get("/budget/{bug_ref}", summary="What one bug has used of its budget: fix attempts, app runs per platform, API checks")
 def get_budget(bug_ref: str, request: Request) -> dict[str, Any]:
-    _get(_store(request).reports, bug_ref, "report")
+    _report(request, bug_ref)
     return _sandbox(request).budget(bug_ref)
 
 

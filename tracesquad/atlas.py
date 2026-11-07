@@ -47,7 +47,7 @@ def release_candidate(store: Store, platform: str, version: str) -> Build | None
 
 
 def submit_fix(req: FixRequest, store: Store, sandbox: Sandbox) -> dict[str, Any]:
-    report = store.reports.get(req.bug_ref)
+    report = sandbox.report(req.bug_ref)
     if report is None:
         raise ApiError(404, f"report '{req.bug_ref}' not found")
     if req.culprit_change_id not in store.changes:

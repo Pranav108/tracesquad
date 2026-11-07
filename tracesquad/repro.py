@@ -80,7 +80,7 @@ def _nothing_seen(steps: list[ReproStep]) -> str:
 
 
 def run_repro(req: ReproRequest, store: Store, sandbox: Sandbox) -> ReproResult:
-    report = store.reports.get(req.bug_ref)
+    report = sandbox.report(req.bug_ref)
     if report is None:
         raise ApiError(404, f"report '{req.bug_ref}' not found; bug_ref is the report id, e.g. RPT-102")
     dynamic = sandbox.dynamic_builds.get(req.build_id)

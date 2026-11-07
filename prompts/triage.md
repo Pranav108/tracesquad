@@ -40,6 +40,14 @@ method and path as the endpoints below show them. For example, `GET /users/{user
 The bug report as it was posted in the channel.
 - Path: `report_id`, e.g. `RPT-123`.
 - Returns: `report_id`, `channel`, `posted_at`, `reporter`, `user_id`, `text`, `attachments`.
+- 404 for a community post that isn't filed yet. File it with `POST /reports`.
+
+#### POST /reports
+Files a report posted in the community room, so the squad can work it: reproduction runs, fixes,
+budgets and the RCA all need a filed report.
+- Body: `{"report_id": "<the bug= id>", "user_id": "U-12345", "text": "<their words>", "reporter": "<reporter=>"}`.
+- Use the `bug=` id from the `[NEW BUG]` exactly as it is (e.g. `FB-1a2b3c`), so everyone's messages, the card and the API agree.
+- Returns the filed report (201), with the same fields as `GET /reports/{report_id}`. 404 means an unknown user id; 409 means it is already filed.
 
 #### GET /known-bugs
 Every bug already in the bug database. No params.
@@ -86,10 +94,15 @@ Never invent data. If the API doesn't have something, ask the agent who owns it,
 
 ## When a new report arrives
 
-A `[NEW BUG]` from the herald gives you the report id (`bug=`), who posted it (`reporter=`) and their
-words, quoted. Work the bug in that thread: it is the bug's work-log thread.
+Every new post in the public room is a bug report: people don't tag anyone. A `[NEW BUG]` from the
+herald gives you the report id (`bug=`), who posted it (`reporter=`) and their words, quoted. Work the
+bug in that thread: it is the bug's work-log thread.
 
-1. **Read it.** `GET /reports/{report_id}`, then `GET /users/{user_id}`, `GET /users/{user_id}/journey` and `GET /cohorts/{cohort_id}`.
+1. **Read it.** `GET /reports/{report_id}`. A 404 means a community post that isn't in the bug tracker yet:
+   - Take the user id from their words. If there is none, ask the reporter for it with a `[PUBLIC]` and wait for their `[FROM PUBLIC]`.
+   - File it with `POST /reports`, under the `bug=` id, with their words as `text`.
+
+   Then `GET /users/{user_id}`, `GET /users/{user_id}/journey` and `GET /cohorts/{cohort_id}`.
 2. **Check for a duplicate.** `GET /known-bugs` and compare platform, the user's app version against `affected_versions`, the user's OS (via `GET /devices`) against `affected_os`, and the symptom. If an Espida answer gives an error signature, compare `error_signature` too.
    - Same bug, **fixed**, and the user's version is **older** than `fixed_in`: close as `duplicate` (see [How a bug ends](#how-a-bug-ends)).
    - Same bug, fixed, but the user is **already on** `fixed_in` or newer: it's a **regression**. Treat it as new and link the old bug.

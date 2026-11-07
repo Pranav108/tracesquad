@@ -62,6 +62,7 @@ agents:
       gremlin: Intended behaviour and release questions
     api:
       - GET /reports/{report_id}
+      - POST /reports
       - GET /known-bugs
       - GET /known-bugs/{bug_id}
       - GET /users/{user_id}
@@ -205,7 +206,7 @@ agents:
 herald:
   what: tracesquad/herald.py, a deterministic Mattermost bot. It reads message headers only and never writes prose of its own.
   does:
-    - "Opens a bug: a root post in the public room addressed to @triage gets a work-log thread with a [NEW BUG] to triage, and a status card in the reporter's thread."
+    - "Opens a bug: every top-level post in the public room is a report (nobody has to tag anyone; replies are discussion). It gets a work-log thread with a [NEW BUG] to triage, and a status card in the reporter's thread. require_mention: true brings back the old rule (only posts that tag @triage)."
     - "Keeps the card current from the work log's headers: stage (Received, Investigating, Fixing, Verifying, Wrapping up, Done), who has it now, and evidence links to the exact work-log posts that carry an evidence: line, every [CLOSE] and every [RCA]."
     - "Copies Triage's [PUBLIC] messages into the public thread, with user ids, pre-prod env names and service versions removed."
     - "Sends anything people write in a bug's public thread to triage in the work log, as [FROM PUBLIC]."
@@ -215,7 +216,7 @@ herald:
 
 # People in the rooms. Agents never act for them.
 people:
-  reporter: Posts the bug with a user id in the public room, addressed to triage. Only Triage talks to them, with [PUBLIC].
+  reporter: Posts the bug as a new post in the public room, ideally with their user id; no tag needed. Only Triage talks to them, with [PUBLIC].
   community: Anyone else in the public room. They see each bug's status card and Triage's [PUBLIC] messages; their replies reach Triage as [FROM PUBLIC].
   fe_be_teams: Read the work log, review and merge Atlas's PRs, own their features, and take over escalated bugs.
   operator: Runs the API (scripts/serve.sh) and the herald (scripts/herald.sh), sends triage "sweep" about every 10 minutes, resets between demos.

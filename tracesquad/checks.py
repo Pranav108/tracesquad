@@ -26,7 +26,7 @@ class CheckRequest(BaseModel):
 
 
 def run_api_check(req: CheckRequest, store: Store, sandbox: Sandbox) -> dict[str, Any]:
-    if req.bug_ref not in store.reports:
+    if sandbox.report(req.bug_ref) is None:
         raise ApiError(404, f"report '{req.bug_ref}' not found; bug_ref is the report id, e.g. RPT-101")
     user = sandbox.get(req.mock_user_id)
     method = req.method.upper()

@@ -6,8 +6,8 @@ second room, the work log, which only the team can read, and the herald stands b
 It is a plain program, not an agent: it reads message headers and never writes prose of its own.
 
 For each bug it:
-- opens a thread in the work log when a report addressed to triage appears in the public room, and
-  sends the report to Triage there (`[NEW BUG]`);
+- opens a thread in the work log for every new post in the public room (each top-level post there is a
+  bug report; replies are the discussion) and sends the report to Triage there (`[NEW BUG]`);
 - posts one status card in the reporter's public thread and edits it as the work moves. The card
   is built only from the protocol headers (type, `from=`, `to=`, `outcome=`) and links each piece of
   evidence to the exact message in the work log that carries it, so nobody has to read the log
@@ -378,6 +378,8 @@ class Config:
     agents: list[str] = field(default_factory=lambda: list(AGENTS))
     ignore_users: list[str] = field(default_factory=lambda: ["admin", "switch-admin", "system-bot", "system"])
     report_id_pattern: str = r"\bRPT-\d+\b"
+    # False: every top-level post in the public room is a report. True: only posts that mention triage.
+    require_mention: bool = False
     redact_patterns: list[str] = field(default_factory=lambda: list(DEFAULT_REDACT))
     poll_seconds: float = 2.0
     token_file: str = str(DEFAULT_TOKEN_FILE)
@@ -557,7 +559,8 @@ class Herald:
             if key is not None:
                 self._forward_to_triage(self.state.bugs[key], author, text)
             return
-        if not re.search(rf"@{re.escape(self.triage)}\b", text, re.IGNORECASE):
+        # A top-level post is a new report: people don't have to tag anyone.
+        if self.config.require_mention and not re.search(rf"@{re.escape(self.triage)}\b", text, re.IGNORECASE):
             return
         self._open_bug(post, author, text)
 

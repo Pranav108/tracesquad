@@ -139,16 +139,18 @@ def build() -> str:
         "  public_room:",
         "    type: room",
         f"    name: {PUBLIC_ROOM}",
-        f"    description: {q('Report app bugs here. Each bug gets a status card; the squad works it in the work log')}",
+        f"    description: {q('Report app bugs here, one new post per bug (no tag needed). Each bug gets a status card; the squad works it in the work log')}",
         '    bridge: "{bridge}"',
         "    channel_type: channel_public",
         "    group: squad_group",
-        # Triage is here so that @triage resolves when someone reports a bug. It never posts here.
+        # Triage is a member so that a report that still tags @triage resolves. It never posts here: the
+        # herald opens a bug for every new post, tagged or not.
         f"    agents: [{SQUAD['topology']['owner_of_every_bug']}]",
         *users,
         "    instructions: |",
-        block("This is the public room: anyone in the community reads it. People report bugs here,"
-              " addressed to triage. Agents never post in this room. If you are woken here, end your turn"
+        block("This is the public room: anyone in the community reads it. Every new post here is a bug"
+              " report, and replies are the discussion; nobody needs to tag anyone. Agents never post in"
+              " this room. If you are woken here, end your turn"
               " without posting: the herald (a program, not an agent) opens each bug's thread in the work"
               " log room and hands the report to Triage there, posts a status card in the reporter's"
               " thread and keeps it current, and copies Triage's [PUBLIC] messages back here.", 6),

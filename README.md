@@ -176,16 +176,18 @@ scripts/serve.sh                              # API on http://127.0.0.1:8095; in
 
 **3. Report a bug.**
 
-- **In a room (Switch):** post the report in the public room to @triage, e.g. "@triage new bug RPT-102:
-  Checkout shows 'Something went wrong' right after I apply a coupon. user U-77105". A status card
-  appears in your thread. About every 10 minutes, send triage `sweep` in the work log so it can nudge
-  stuck bugs.
+- **In a room (Switch):** post the report as a new message in the public room. Every new post there is
+  a bug report, so there's no need to tag anyone. For example: "Checkout shows 'Something went wrong'
+  right after I apply a coupon. user U-77105". A status card appears in your thread, and Triage files
+  the post under the card's id (`FB-…`). About every 10 minutes, send triage `sweep` in the work log so
+  it can nudge stuck bugs.
 - **In Claude Code:** run `/tracesquad <the same text>`.
 
 **4. Check the agents' work.**
 
-- `tsq GET /rca/RPT-102` shows Gremlin's RCA.
-- `tsq GET /fixes?bug_ref=RPT-102` shows Atlas's fix attempts.
+- `tsq GET /rca/<id>` shows Gremlin's RCA, where `<id>` is the bug's id on its card (`FB-…`, or
+  `RPT-102` if the post named one).
+- `tsq GET '/fixes?bug_ref=<id>'` shows Atlas's fix attempts.
 - `tsq POST /sandbox/reset` resets everything between runs.
 
 ## How agents find the API

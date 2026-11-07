@@ -14,10 +14,10 @@ reads message headers and never writes prose of its own.
 The reporter's thread in the public room holds three kinds of post, and nothing else:
 
 ```
-user      @Triage new bug RPT-101: Renewed Gold yesterday, money got deducted, but the app still
-          shows 'Join Gold'. user U-48213
+user      Renewed Gold yesterday, money got deducted, but the app still shows 'Join Gold'.
+          user U-48213
 
-TraceSquad  RPT-101 · ✅ Fixed · closed 5:01 PM after 21 min                  ← the status card,
+TraceSquad  FB-k3x9qa · ✅ Fixed · closed 5:01 PM after 21 min                ← the status card,
             ✅ Received → ✅ Investigating → ✅ Fixing → ✅ Verifying → ✅ Wrapping up → ✅ Done
             Evidence (team only): Reproduction · Logs and impact · Fix (PR and builds) ·
                                   Fix verification · Root cause analysis
@@ -43,10 +43,13 @@ TraceSquad  Triage: Fixed. After renewing, the app kept showing an old expired G
 
 ## What the herald does
 
-1. **A new report.** A root post in the public channel that mentions `@triage` opens a bug. The
-   report id is the first match of `report_id_pattern` (`RPT-<digits>` by default). The herald posts a
-   `[NEW BUG]` to triage in the work log, which starts the bug's work-log thread, and posts the card in
-   the reporter's thread.
+1. **A new report.** Every top-level post in the public channel is a bug report: people don't tag
+   anyone, and replies in its thread are the discussion. The report id is the first match of
+   `report_id_pattern` (`RPT-<digits>` by default), or `FB-` and the start of the post's id when the
+   post names none. The herald posts a `[NEW BUG]` to triage in the work log, which starts the bug's
+   work-log thread, and posts the card in the reporter's thread. Triage files an `FB-` report in the
+   API (`POST /reports`) before the squad works it. Set `require_mention: true` to open bugs only for
+   posts that tag `@triage`, in a room where people also talk about other things.
 2. **The work log.** Every post in the work log with a protocol header (`[ASK]`, `[REPORT]`, …, with
    `bug=`, `from=`, `to=`) updates its bug's card. Only the header is read:
 
@@ -128,7 +131,8 @@ scripts/herald.sh status    # the bugs it is tracking
 | `triage` | `triage` | The agent reports go to, and the only one allowed to post `[PUBLIC]` |
 | `agents` | the six | Agent names: never treated as reporters, and their `@` is dropped in copied text |
 | `ignore_users` | `admin`, `switch-admin`, `system-bot`, `system` | Accounts whose posts never open a bug or count as a reply |
-| `report_id_pattern` | `\bRPT-\d+\b` | How a report id is found in a report. Without one the id is `FB-<post id>` |
+| `report_id_pattern` | `\bRPT-\d+\b` | How a report id is found in a report. Without one the id is `FB-` and the first 6 characters of the post id |
+| `require_mention` | `false` | `false`: every top-level post is a report. `true`: only posts that tag `@triage` |
 | `redact_patterns` | user ids, `preprod-…`, `<name>-service@<version>` | Removed from every `[PUBLIC]` before it's posted |
 | `poll_seconds` | `2` | How often both channels are read |
 | `token_file` | `~/.tracesquad/herald-token` | Where the bot token is, unless `TRACESQUAD_HERALD_TOKEN` is set |
@@ -138,6 +142,8 @@ scripts/herald.sh status    # the bugs it is tracking
 
 - **Polling, not a socket.** Cards lag the work log by up to `poll_seconds`.
 - **One herald per pair of channels.** Two would post two cards.
+- **Every top-level post is a report.** Keep the public room for bug reports (talk goes in a bug's
+  thread), or set `require_mention: true` if the room is also used for other things.
 - **Mattermost only.** The card is a Mattermost post the bot edits; Slack would need its own client.
 - **Redaction is a safety net,** not the privacy rule. The rule is in Triage's instructions: a
   `[PUBLIC]` holds plain words and nothing internal.
